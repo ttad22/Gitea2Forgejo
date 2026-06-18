@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from enum import StrEnum
+from enum import Enum
 from typing import Iterable
 
 
-class PlanStage(StrEnum):
+class PlanStage(str, Enum):
     FORGEJO_10_VALIDATION = "forgejo_10_validation"
     POST_CUTOVER = "post_cutover"
 

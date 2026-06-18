@@ -1,0 +1,66 @@
+{
+  "name": "post-cutover-failure",
+  "stage": "post_cutover",
+  "outcomes": {
+    "service-health": {
+      "status": "passed",
+      "detail": "Core services are active."
+    },
+    "web-health-endpoint": {
+      "status": "passed",
+      "detail": "Health endpoint returned 200."
+    },
+    "ui-login-admin": {
+      "status": "passed",
+      "detail": "Admin login completed."
+    },
+    "ui-login-non-admin": {
+      "status": "passed",
+      "detail": "Non-admin login completed."
+    },
+    "repo-browse": {
+      "status": "passed",
+      "detail": "Repository tree rendered."
+    },
+    "issue-view": {
+      "status": "passed",
+      "detail": "Issue details rendered."
+    },
+    "pr-view": {
+      "status": "passed",
+      "detail": "PR details rendered."
+    },
+    "http-clone-private-repo": {
+      "status": "passed",
+      "detail": "HTTP clone succeeded."
+    },
+    "ssh-clone-private-repo": {
+      "status": "failed",
+      "detail": "SSH clone failed with a host key mismatch after cutover."
+    },
+    "push-test-disposable-repo": {
+      "status": "passed",
+      "detail": "This value should never be used because the dependency fails first."
+    },
+    "webhook-list": {
+      "status": "passed",
+      "detail": "Webhook list loaded."
+    },
+    "webhook-delivery": {
+      "status": "passed",
+      "detail": "This value should never be used because the dependency fails first."
+    },
+    "attachments-load": {
+      "status": "passed",
+      "detail": "Attachment download succeeded."
+    },
+    "repo-archive-download": {
+      "status": "passed",
+      "detail": "Repository archive downloaded."
+    },
+    "lfs-endpoint-sanity": {
+      "status": "passed",
+      "detail": "LFS sanity check passed."
+    }
+  }
+}

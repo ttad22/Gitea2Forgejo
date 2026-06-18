@@ -1,0 +1,37 @@
+{
+  "name": "git-ops",
+  "host": "10.200.40.100",
+  "gitea_version": "1.22.0",
+  "postgres_version": "14.23",
+  "app_ini_path": "/etc/gitea/app.ini",
+  "data_root": "/var/lib/gitea",
+  "service": {
+    "install_mode": "systemd-binary",
+    "reverse_proxy": "nginx",
+    "database": "postgresql",
+    "app_service_name": "gitea",
+    "ssh_mode": "host-sshd"
+  },
+  "resources": {
+    "root_free_gb": 188.0,
+    "gitea_total_mb": 876.0,
+    "repositories_mb": 795.0,
+    "attachments_mb": 80.0,
+    "lfs_mb": 0.004,
+    "packages_mb": 0.004
+  },
+  "features": {
+    "repositories": 36,
+    "users": 5,
+    "org_memberships": 2,
+    "lfs_objects": 0,
+    "action_runs": 0,
+    "action_runners": 0,
+    "packages": 0
+  },
+  "notes": [
+    "nginx terminates on :80 and proxies to Gitea on :3000",
+    "LFS enabled in config but effectively unused",
+    "Actions and packages currently unused"
+  ]
+}

@@ -1,0 +1,3 @@
+allowed: no
+reason: direct jump to current Forgejo is disallowed for this source cohort
+required path: Forgejo 10.x first, then current Forgejo

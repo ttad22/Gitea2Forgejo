@@ -1,0 +1,66 @@
+{
+  "name": "forgejo-10-success",
+  "stage": "forgejo_10_validation",
+  "outcomes": {
+    "service-health": {
+      "status": "passed",
+      "detail": "System services reported healthy after the staged 10.x upgrade."
+    },
+    "web-health-endpoint": {
+      "status": "passed",
+      "detail": "/api/healthz returned 200."
+    },
+    "ui-login-admin": {
+      "status": "passed",
+      "detail": "Admin dashboard rendered with expected repositories."
+    },
+    "ui-login-non-admin": {
+      "status": "passed",
+      "detail": "Standard user dashboard rendered normally."
+    },
+    "repo-browse": {
+      "status": "passed",
+      "detail": "Repository tree rendered for the representative private repository."
+    },
+    "issue-view": {
+      "status": "passed",
+      "detail": "Issue metadata and comments loaded."
+    },
+    "pr-view": {
+      "status": "passed",
+      "detail": "Pull request discussion and diff rendered."
+    },
+    "http-clone-private-repo": {
+      "status": "passed",
+      "detail": "HTTPS clone completed with app password credentials."
+    },
+    "ssh-clone-private-repo": {
+      "status": "passed",
+      "detail": "SSH clone completed with the validation deploy key."
+    },
+    "push-test-disposable-repo": {
+      "status": "passed",
+      "detail": "Disposable branch push succeeded and was cleaned up."
+    },
+    "webhook-list": {
+      "status": "passed",
+      "detail": "Webhook configuration page loaded."
+    },
+    "webhook-delivery": {
+      "status": "passed",
+      "detail": "Manual redelivery completed successfully."
+    },
+    "attachments-load": {
+      "status": "passed",
+      "detail": "Attachment download returned the expected payload."
+    },
+    "repo-archive-download": {
+      "status": "passed",
+      "detail": "Repository archive downloaded and unpacked."
+    },
+    "lfs-endpoint-sanity": {
+      "status": "passed",
+      "detail": "LFS batch endpoint returned a protocol-compliant response."
+    }
+  }
+}

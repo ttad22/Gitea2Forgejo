@@ -52,6 +52,63 @@ class DeploymentAudit:
 
 
 @dataclass(slots=True)
+class AuditFinding:
+    code: str
+    severity: str
+    summary: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class DeploymentAuditOutcome:
+    ready: bool
+    risk_level: str
+    findings: list[AuditFinding]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "ready": self.ready,
+            "risk_level": self.risk_level,
+            "findings": [finding.to_dict() for finding in self.findings],
+        }
+
+
+@dataclass(slots=True)
+class DeploymentAuditReport:
+    host_label: str
+    service_model: str
+    gitea_version: str
+    database_backend: str
+    database_version: str
+    config_path: str
+    data_root: str
+    reverse_proxy: str
+    reverse_proxy_port: int
+    app_port: int
+    repositories: int
+    users: int
+    org_memberships: int
+    repository_storage_mb: float
+    attachments_storage_mb: float
+    lfs_objects: int
+    actions_runs: int
+    action_runners: int
+    packages: int
+    root_free_gb: float
+    internal_ssh_server: bool
+    lfs_enabled: bool
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "DeploymentAuditReport":
+        return cls(**payload)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
 class CompatibilityAssessment:
     source_version: str
     supported: bool

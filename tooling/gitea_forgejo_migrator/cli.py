@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 
+from .audit import evaluate_deployment
 from .backup import build_backup_manifest
 from .compatibility import assess_gitea_to_forgejo
 from .discovery import collect_live_audit
 from .io import dump_backup_manifest, dump_json, dump_migration_plan, dump_smoke_script, load_audit
+from .models import DeploymentAuditReport
 from .planning import build_migration_plan
 from .shell import ShellRunner
 from .simulate import build_simulation_report
@@ -17,6 +20,74 @@ def _compatibility_cmd(args: argparse.Namespace) -> int:
     result = assess_gitea_to_forgejo(args.version)
     print(json.dumps(result.to_dict(), indent=2))
     return 0 if result.supported else 2
+
+
+def _load_report(path: str) -> DeploymentAuditReport:
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if "host_label" not in payload and {"name", "host", "service", "resources", "features"} <= payload.keys():
+        payload = {
+            "host_label": payload["name"],
+            "service_model": "systemd"
+            if payload["service"].get("install_mode", "").startswith("systemd")
+            else payload["service"].get("install_mode", "unknown"),
+            "gitea_version": payload["gitea_version"],
+            "database_backend": payload["service"]["database"],
+            "database_version": payload["postgres_version"],
+            "config_path": payload["app_ini_path"],
+            "data_root": payload["data_root"],
+            "reverse_proxy": payload["service"]["reverse_proxy"],
+            "reverse_proxy_port": 80,
+            "app_port": 3000,
+            "repositories": payload["features"]["repositories"],
+            "users": payload["features"]["users"],
+            "org_memberships": payload["features"]["org_memberships"],
+            "repository_storage_mb": payload["resources"]["repositories_mb"],
+            "attachments_storage_mb": payload["resources"]["attachments_mb"],
+            "lfs_objects": payload["features"]["lfs_objects"],
+            "actions_runs": payload["features"]["action_runs"],
+            "action_runners": payload["features"]["action_runners"],
+            "packages": payload["features"]["packages"],
+            "root_free_gb": payload["resources"]["root_free_gb"],
+            "internal_ssh_server": payload["service"].get("ssh_mode") != "host-sshd",
+            "lfs_enabled": payload["resources"].get("lfs_mb", 0.0) > 0.0 or payload["features"].get("lfs_objects", 0) > 0,
+        }
+    return DeploymentAuditReport.from_dict(payload)
+
+
+def _audit_cmd(args: argparse.Namespace) -> int:
+    report = _load_report(args.report)
+    outcome = evaluate_deployment(report)
+    if args.json:
+        print(json.dumps({"audit": outcome.to_dict(), "report": report.to_dict()}))
+    else:
+        print(f"ready: {'yes' if outcome.ready else 'no'}")
+        print(f"risk-level: {outcome.risk_level}")
+        for finding in outcome.findings:
+            print(f"- [{finding.severity}] {finding.code}: {finding.summary}")
+    return 0 if outcome.ready else 1
+
+
+def _gate_cmd(args: argparse.Namespace) -> int:
+    report = _load_report(args.report)
+    assessment = assess_gitea_to_forgejo(report.gitea_version)
+
+    if args.target == "forgejo-current":
+        print("allowed: no")
+        print("reason: direct jump to current Forgejo is disallowed for this source cohort")
+        print("required path: Forgejo 10.x first, then current Forgejo")
+        return 1
+
+    if args.target == "forgejo-10":
+        allowed = assessment.supported and any(stage.lower().startswith("forgejo-10") for stage in assessment.recommended_stages)
+        print(f"allowed: {'yes' if allowed else 'no'}")
+        if allowed:
+            print("next-stage: forgejo-10.x")
+            return 0
+        print(f"reason: {assessment.reason}")
+        return 1
+
+    print(f"reason: unsupported target {args.target}")
+    return 1
 
 
 def _backup_cmd(args: argparse.Namespace) -> int:
@@ -67,6 +138,16 @@ def build_parser() -> argparse.ArgumentParser:
     compat.add_argument("--version", required=True)
     compat.set_defaults(func=_compatibility_cmd)
 
+    audit = sub.add_parser("audit", help="Evaluate a deployment audit report for migration readiness.")
+    audit.add_argument("report")
+    audit.add_argument("--json", action="store_true")
+    audit.set_defaults(func=_audit_cmd)
+
+    gate = sub.add_parser("gate", help="Apply compatibility gates for a target migration stage.")
+    gate.add_argument("report")
+    gate.add_argument("--target", required=True, choices=["forgejo-10", "forgejo-current"])
+    gate.set_defaults(func=_gate_cmd)
+
     backup = sub.add_parser("backup-manifest", help="Generate a backup manifest from an audit fixture.")
     backup.add_argument("--audit", required=True)
     backup.add_argument("--output", required=True)
@@ -97,9 +178,9 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     return args.func(args)
 
 
