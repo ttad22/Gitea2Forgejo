@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gitea-forgejo-migrator"
+version = "0.1.0"
+description = "Smoke-check planning and simulation harness for staged Gitea to Forgejo migrations."
+requires-python = ">=3.11"
+
+[tool.setuptools]
+packages = ["tooling.smoke"]
