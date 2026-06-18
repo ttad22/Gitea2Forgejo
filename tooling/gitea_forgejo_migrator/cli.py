@@ -9,8 +9,10 @@ from .backup import build_backup_manifest
 from .compatibility import assess_gitea_to_forgejo
 from .discovery import collect_live_audit
 from .io import dump_backup_manifest, dump_json, dump_migration_plan, dump_smoke_script, load_audit
+from .local import write_local_runner
 from .models import DeploymentAuditReport
 from .planning import build_migration_plan
+from .preflight import run_local_preflight
 from .shell import ShellRunner
 from .simulate import build_simulation_report
 from .smoke import build_smoke_plan
@@ -130,6 +132,30 @@ def _collect_live_cmd(args: argparse.Namespace) -> int:
     return 0
 
 
+def _emit_local_runner_cmd(args: argparse.Namespace) -> int:
+    target = write_local_runner(
+        path=args.output,
+        output_dir=args.output_dir,
+        app_ini_path=args.app_ini_path,
+        data_root=args.data_root,
+    )
+    print(target)
+    return 0
+
+
+def _preflight_local_cmd(args: argparse.Namespace) -> int:
+    exit_code, paths, bundle = run_local_preflight(
+        args.output_dir,
+        app_ini_path=args.app_ini_path,
+        data_root=args.data_root,
+    )
+    print(paths["preflight"])
+    print(f"ready: {'yes' if bundle['readiness']['ready'] else 'no'}")
+    print(f"compatibility-supported: {'yes' if bundle['simulation']['compatibility']['supported'] else 'no'}")
+    print(f"risk-level: {bundle['readiness']['risk_level']}")
+    return exit_code
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gitea-forgejo-migrator")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -174,6 +200,25 @@ def build_parser() -> argparse.ArgumentParser:
     collect.add_argument("--data-root", default="/var/lib/gitea")
     collect.add_argument("--output", required=True)
     collect.set_defaults(func=_collect_live_cmd)
+
+    local_preflight = sub.add_parser(
+        "preflight-local",
+        help="Collect a host-local audit and build a live preflight bundle on the current server.",
+    )
+    local_preflight.add_argument("--app-ini-path", default="/etc/gitea/app.ini")
+    local_preflight.add_argument("--data-root", default="/var/lib/gitea")
+    local_preflight.add_argument("--output-dir", default="live-preflight")
+    local_preflight.set_defaults(func=_preflight_local_cmd)
+
+    local_runner = sub.add_parser(
+        "emit-local-runner",
+        help="Emit a host-local wrapper so an admin can run preflight directly on the source server.",
+    )
+    local_runner.add_argument("--output", required=True)
+    local_runner.add_argument("--output-dir", default="./gfm-preflight")
+    local_runner.add_argument("--app-ini-path", default="/etc/gitea/app.ini")
+    local_runner.add_argument("--data-root", default="/var/lib/gitea")
+    local_runner.set_defaults(func=_emit_local_runner_cmd)
 
     return parser
 

@@ -1,0 +1,2 @@
+allowed: yes
+next-stage: forgejo-10.x

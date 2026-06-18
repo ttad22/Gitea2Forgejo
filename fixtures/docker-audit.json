@@ -1,0 +1,36 @@
+{
+  "name": "docker-gitea",
+  "host": "docker-git.example.org",
+  "gitea_version": "1.22.6",
+  "postgres_version": "15.7",
+  "app_ini_path": "/data/gitea/conf/app.ini",
+  "data_root": "/srv/gitea",
+  "service": {
+    "install_mode": "docker-compose",
+    "reverse_proxy": "traefik",
+    "database": "postgresql",
+    "app_service_name": "docker-gitea",
+    "ssh_mode": "host-sshd"
+  },
+  "resources": {
+    "root_free_gb": 64.0,
+    "gitea_total_mb": 6144.0,
+    "repositories_mb": 4096.0,
+    "attachments_mb": 512.0,
+    "lfs_mb": 256.0,
+    "packages_mb": 128.0
+  },
+  "features": {
+    "repositories": 142,
+    "users": 48,
+    "org_memberships": 77,
+    "lfs_objects": 350,
+    "action_runs": 0,
+    "action_runners": 0,
+    "packages": 8
+  },
+  "notes": [
+    "containerized install behind traefik",
+    "requires container-aware service cutover validation"
+  ]
+}

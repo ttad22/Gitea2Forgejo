@@ -1,0 +1,175 @@
+{
+  "audit": {
+    "name": "actions-gitea",
+    "host": "actions-git.example.org",
+    "gitea_version": "1.22.3",
+    "postgres_version": "14.12",
+    "app_ini_path": "/etc/gitea/app.ini",
+    "data_root": "/var/lib/gitea",
+    "service": {
+      "install_mode": "systemd-binary",
+      "reverse_proxy": "nginx",
+      "database": "postgresql",
+      "app_service_name": "gitea",
+      "ssh_mode": "host-sshd"
+    },
+    "resources": {
+      "root_free_gb": 92.0,
+      "gitea_total_mb": 8192.0,
+      "repositories_mb": 6500.0,
+      "attachments_mb": 250.0,
+      "lfs_mb": 0.0,
+      "packages_mb": 0.0
+    },
+    "features": {
+      "repositories": 115,
+      "users": 63,
+      "org_memberships": 89,
+      "lfs_objects": 0,
+      "action_runs": 938,
+      "action_runners": 4,
+      "packages": 0
+    },
+    "notes": [
+      "actions-heavy instance; runner continuity is critical"
+    ]
+  },
+  "compatibility": {
+    "source_version": "1.22.3",
+    "supported": true,
+    "reason": "Last officially supported Gitea cohort for staged Forgejo upgrade.",
+    "recommended_stages": [
+      "forgejo-10.x",
+      "forgejo-current"
+    ],
+    "risk_level": "low",
+    "warnings": [
+      "Preserve app.ini secrets, database backups, repository data, and reverse-proxy behavior before replacement.",
+      "Do not skip the Forgejo 10.x stage."
+    ]
+  },
+  "backup_manifest": {
+    "deployment_name": "actions-gitea",
+    "backup_root_hint": "/var/backups/gitea-forgejo-migrator",
+    "vm_snapshot_required": true,
+    "items": [
+      {
+        "label": "vm_snapshot",
+        "kind": "hypervisor_snapshot",
+        "path": null,
+        "command": "Create hypervisor snapshot before service replacement.",
+        "required": true
+      },
+      {
+        "label": "postgres_dump",
+        "kind": "database_dump",
+        "path": null,
+        "command": "sudo -u postgres pg_dump -Fc gitea > gitea.pre-forgejo.dump",
+        "required": true
+      },
+      {
+        "label": "app_ini",
+        "kind": "file_archive",
+        "path": "/etc/gitea/app.ini",
+        "command": null,
+        "required": true
+      },
+      {
+        "label": "custom",
+        "kind": "directory_archive",
+        "path": "/var/lib/gitea/custom",
+        "command": null,
+        "required": true
+      },
+      {
+        "label": "data",
+        "kind": "directory_archive",
+        "path": "/var/lib/gitea/data",
+        "command": null,
+        "required": true
+      },
+      {
+        "label": "lfs",
+        "kind": "directory_archive",
+        "path": "/var/lib/gitea/lfs",
+        "command": null,
+        "required": true
+      },
+      {
+        "label": "log",
+        "kind": "directory_archive",
+        "path": "/var/lib/gitea/log",
+        "command": null,
+        "required": false
+      }
+    ]
+  },
+  "migration_plan": {
+    "deployment_name": "actions-gitea",
+    "maintenance_window_minutes": 90,
+    "stages": [
+      "gitea-1.22.x",
+      "forgejo-10.x",
+      "forgejo-current"
+    ],
+    "prerequisites": [
+      "Confirm current backups are green.",
+      "Take a VM snapshot.",
+      "Generate a PostgreSQL dump.",
+      "Archive /etc/gitea and /var/lib/gitea.",
+      "Freeze writes during the cutover window."
+    ],
+    "rollback_summary": [
+      "Stop Forgejo.",
+      "Restore the previous Gitea binary or package.",
+      "Restore PostgreSQL dump if schema rollback is required.",
+      "Restore /etc/gitea and /var/lib/gitea archives.",
+      "Start Gitea and validate login, clone, and push."
+    ]
+  },
+  "smoke_plan": {
+    "deployment_name": "actions-gitea",
+    "checks": [
+      {
+        "name": "service_app",
+        "command": "systemctl is-active gitea",
+        "critical": true
+      },
+      {
+        "name": "service_proxy",
+        "command": "systemctl is-active nginx",
+        "critical": true
+      },
+      {
+        "name": "service_db",
+        "command": "systemctl is-active postgresql",
+        "critical": true
+      },
+      {
+        "name": "web_health",
+        "command": "curl -fsS http://127.0.0.1:3000/api/health",
+        "critical": true
+      },
+      {
+        "name": "root_ui",
+        "command": "curl -fsSI http://127.0.0.1:80/ | head -n 1",
+        "critical": true
+      },
+      {
+        "name": "https_root",
+        "command": "curl -fsSI https://git.tttmsp.com/ | head -n 1",
+        "critical": false
+      },
+      {
+        "name": "https_repo_browse",
+        "command": "curl -fsSI https://git.tttmsp.com/explore/repos | head -n 1",
+        "critical": false
+      },
+      {
+        "name": "ssh_port",
+        "command": "ss -ltn | grep -q ':22 '",
+        "critical": true
+      }
+    ]
+  }
+}

@@ -24,6 +24,23 @@ This project focuses on:
 - rollback preparation
 - post-cutover verification
 
+## Operator Workflows
+
+The tool is designed around two execution modes:
+
+1. **Server-local admin run**
+   - install the package on the source host
+   - emit a local wrapper
+   - collect and evaluate the deployment on-box
+   - use the generated audit as the contract for backup, planning, and smoke
+     artifacts
+2. **Trusted admin-SSH run**
+   - run the collector from a management host with direct administrative SSH
+   - preserve the same audit schema and downstream planning flow
+
+The product should keep both paths first-class. The transport should be
+replaceable; the migration model should not be.
+
 ## Current TTT Reference Deployment
 
 The initial design target is the live `git-ops` VM (`vm100`) in the TTT
@@ -75,11 +92,28 @@ explicitly gate anything newer.
   - operator runbooks
   - compatibility matrix
   - rollback procedures
+  - product direction and future-work proposals
 - `tooling/`
   - deployment audit scripts
   - backup validation helpers
   - staged migration driver
   - post-cutover smoke checks
+
+## CLI Surface
+
+Current commands:
+
+- `compatibility`
+- `audit`
+- `gate`
+- `backup-manifest`
+- `migration-plan`
+- `smoke-plan`
+- `simulate`
+- `collect-live`
+- `emit-local-runner`
+
+The CLI should remain dry-run centric until the executor exists.
 
 ## Scope Boundaries
 
@@ -96,10 +130,71 @@ It is trying to:
 - make unsupported paths easier to classify early
 - reduce operator error during in-place or same-host migrations
 
+## Product Direction
+
+The near-term product target is not a hosted migration service and not a
+repo-by-repo importer. It is a **fast in-place migrator** that an operator
+installs on the source server or runs with direct administrative access to the
+source server.
+
+That implies a product shape with three phases:
+
+1. **Admin-installed server-side flow**
+   - packaged for direct operator use on the live host
+   - runs audits, backups, compatibility gates, staged execution, and smoke
+     checks locally or over trusted admin SSH
+   - optimized for the smallest realistic maintenance window and the simplest
+     rollback story
+2. **Later GUI release**
+   - wraps the same migration engine in a guided operator interface
+   - exposes preflight results, maintenance steps, live logs, and rollback
+     checkpoints without changing the execution model
+   - aimed at MSP and infra teams that need repeatability across many small
+     self-hosted instances
+3. **Long-term native Forgejo support**
+   - use evidence from the standalone migrator to propose native migration UX
+     inside Forgejo itself
+   - focus on turning a validated admin workflow into upstream-supported UI
+     affordances rather than carrying a permanent forked experience
+
+The core rule across all three phases is the same: preserve the existing
+instance shape whenever possible. Keep paths, database backend, SSH behavior,
+reverse proxy behavior, and clone URLs stable unless the operator explicitly
+chooses to change them.
+
+## Product Boundaries
+
+The intended product should:
+
+- prioritize in-place and same-host migrations first
+- treat server-side installability as a feature, not a temporary workaround
+- keep execution auditable through generated plans, manifests, journals, and
+  smoke reports
+- prefer refusal and escalation over speculative mutation when upstream support
+  is unclear
+
+The intended product should not:
+
+- depend on a cloud control plane for routine migration execution
+- require an operator to manually stitch together multiple ad hoc scripts during
+  a cutover
+- assume that every target instance wants a new Forgejo host or a fresh URL
+
+## Future Work
+
+See [docs/PRODUCT_ROADMAP.md](/home/svc-opsd/TTT-Research/projects/GiteaForgejoMigrator/docs/PRODUCT_ROADMAP.md)
+for milestone sequencing and
+[docs/FUTURE_PRODUCT_DIRECTION.md](/home/svc-opsd/TTT-Research/projects/GiteaForgejoMigrator/docs/FUTURE_PRODUCT_DIRECTION.md)
+for the detailed proposal covering:
+
+- the admin-installed server-side flow
+- the later GUI product layer
+- the long-term path toward native Forgejo UI migration support
+
 ## Next Build Steps
 
-1. codify the VM audit into a machine-readable report
-2. build version-compatibility gating
-3. implement backup manifest generation
-4. implement preflight and postflight smoke tests
+1. build the executor journal and mutation-stage interfaces
+2. add broader edge-case fixture coverage and compatibility matrices
+3. add install-model aware preflight checks for systemd, package, and Docker
+4. test server-local installation and live collection on a reference host
 5. implement the staged `1.22 -> Forgejo 10 -> latest Forgejo` orchestration

@@ -15,6 +15,13 @@ class CompatibilityTests(unittest.TestCase):
         result = assess_gitea_to_forgejo("1.23.0")
         self.assertFalse(result.supported)
         self.assertEqual(result.recommended_stages, [])
+        self.assertIn("repo-by-repo migration", result.warnings[-1])
+
+    def test_gitea_123_patch_release_remains_blocked(self) -> None:
+        result = assess_gitea_to_forgejo("1.23.7")
+        self.assertFalse(result.supported)
+        self.assertEqual(result.risk_level, "high")
+        self.assertIn("not covered", result.reason)
 
 
 if __name__ == "__main__":

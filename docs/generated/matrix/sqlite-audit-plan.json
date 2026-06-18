@@ -1,0 +1,23 @@
+{
+  "deployment_name": "sqlite-gitea",
+  "maintenance_window_minutes": 90,
+  "stages": [
+    "gitea-1.22.x",
+    "forgejo-10.x",
+    "forgejo-current"
+  ],
+  "prerequisites": [
+    "Confirm current backups are green.",
+    "Take a VM snapshot.",
+    "Generate a PostgreSQL dump.",
+    "Archive /etc/gitea and /var/lib/gitea.",
+    "Freeze writes during the cutover window."
+  ],
+  "rollback_summary": [
+    "Stop Forgejo.",
+    "Restore the previous Gitea binary or package.",
+    "Restore PostgreSQL dump if schema rollback is required.",
+    "Restore /etc/gitea and /var/lib/gitea archives.",
+    "Start Gitea and validate login, clone, and push."
+  ]
+}

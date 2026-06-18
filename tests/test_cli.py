@@ -30,3 +30,25 @@ def test_cli_gate_fails_for_direct_current_target(tmp_path, capsys) -> None:
     assert exit_code == 1
     assert "allowed: no" in captured.out
     assert "Forgejo 10" in captured.out
+
+
+def test_cli_emits_local_runner(tmp_path, capsys) -> None:
+    output = tmp_path / "run-preflight.sh"
+
+    exit_code = main(
+        [
+            "emit-local-runner",
+            "--output",
+            str(output),
+            "--output-dir",
+            "./gfm-preflight",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert str(output) in captured.out
+    script = output.read_text(encoding="utf-8")
+    assert "preflight-local" in script
+    assert 'OUTDIR="${1:-./gfm-preflight}"' in script
+    assert "GFM_TOOLING_ROOT" in script

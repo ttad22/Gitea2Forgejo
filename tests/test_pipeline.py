@@ -7,12 +7,14 @@ from pathlib import Path
 
 from gitea_forgejo_migrator.backup import build_backup_manifest
 from gitea_forgejo_migrator.io import load_audit
+from gitea_forgejo_migrator.local import build_local_runner_script
 from gitea_forgejo_migrator.planning import build_migration_plan
 from gitea_forgejo_migrator.simulate import build_simulation_report
 from gitea_forgejo_migrator.smoke import build_smoke_plan
 
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "vm100-audit.json"
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
 
 class PipelineTests(unittest.TestCase):
@@ -47,6 +49,42 @@ class PipelineTests(unittest.TestCase):
             path = Path(tmp) / "report.json"
             path.write_text(json.dumps(report))
             self.assertTrue(path.read_text())
+
+    def test_local_runner_script_references_preflight_local(self) -> None:
+        script = build_local_runner_script("./gfm-audit.json")
+        self.assertIn("preflight-local", script)
+        self.assertIn("gfm-audit.json", script)
+
+    def test_docker_fixture_loads_with_container_service_name(self) -> None:
+        audit = load_audit(FIXTURES / "docker-audit.json")
+        self.assertEqual(audit.service.install_mode, "docker-compose")
+        self.assertEqual(audit.service.app_service_name, "docker-gitea")
+
+    def test_sqlite_fixture_preserves_non_postgres_backend(self) -> None:
+        audit = load_audit(FIXTURES / "sqlite-audit.json")
+        self.assertEqual(audit.service.database, "sqlite")
+        self.assertEqual(audit.postgres_version, "n/a")
+
+    def test_actions_fixture_smoke_plan_keeps_reference_http_healthcheck(self) -> None:
+        audit = load_audit(FIXTURES / "actions-audit.json")
+        smoke = build_smoke_plan(audit)
+        script = smoke.to_script()
+        self.assertIn("curl -fsS http://127.0.0.1:3000/api/health", script)
+        self.assertIn("systemctl is-active gitea", script)
+
+    def test_lfs_heavy_fixture_backup_manifest_includes_lfs_archive(self) -> None:
+        audit = load_audit(FIXTURES / "lfs-heavy-audit.json")
+        manifest = build_backup_manifest(audit)
+        lfs_item = next(item for item in manifest.items if item.label == "lfs")
+        self.assertEqual(lfs_item.path, "/var/lib/gitea/lfs")
+        self.assertTrue(manifest.vm_snapshot_required)
+
+    def test_gitea_123_fixture_generates_blocked_plan(self) -> None:
+        audit = load_audit(FIXTURES / "gitea-123-blocked-audit.json")
+        plan = build_migration_plan(audit)
+        self.assertEqual(plan.stages, [])
+        self.assertEqual(plan.maintenance_window_minutes, 0)
+        self.assertIn("outside the supported direct staged path", plan.prerequisites[0])
 
 
 if __name__ == "__main__":
