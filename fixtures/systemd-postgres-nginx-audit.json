@@ -1,6 +1,6 @@
 {
-  "name": "git-ops",
-  "host": "10.200.40.100",
+  "name": "git-example",
+  "host": "git.example.org",
   "gitea_version": "1.22.0",
   "postgres_version": "14.23",
   "app_ini_path": "/etc/gitea/app.ini",
@@ -30,8 +30,8 @@
     "packages": 0
   },
   "notes": [
-    "domain=git.tttmsp.com",
-    "root_url=https://git.tttmsp.com/",
+    "domain=git.example.org",
+    "root_url=https://git.example.org/",
     "nginx terminates on :80 and proxies to Gitea on :3000",
     "LFS enabled in config but effectively unused",
     "Actions and packages currently unused"

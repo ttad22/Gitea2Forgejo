@@ -8,10 +8,10 @@ from gitea_forgejo_migrator.discovery import _parse_app_ini, _size_mb
 class DiscoveryTests(unittest.TestCase):
     def test_parse_app_ini_extracts_section_values(self) -> None:
         config = _parse_app_ini(
-            "WORK_PATH = /var/lib/gitea\n\n[server]\nDOMAIN = git.tttmsp.com\n"
+            "WORK_PATH = /var/lib/gitea\n\n[server]\nDOMAIN = git.example.org\n"
         )
         self.assertEqual(config["work_path"], "/var/lib/gitea")
-        self.assertEqual(config["server.domain"], "git.tttmsp.com")
+        self.assertEqual(config["server.domain"], "git.example.org")
 
     def test_size_mb_handles_gigabytes(self) -> None:
         self.assertEqual(_size_mb("1.5G"), 1536.0)

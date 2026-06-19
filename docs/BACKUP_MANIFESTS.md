@@ -23,7 +23,8 @@ Each artifact records:
 
 ## Planning assumptions
 
-1. The source deployment is a same-host `systemd` installation like `vm100`.
+1. The source deployment is a same-host `systemd` installation in the
+   supported executor cohort.
 2. A hypervisor snapshot is still required immediately before cutover.
 3. The application-level backup set is the rollback source of truth once later
    Forgejo migrations have been attempted.

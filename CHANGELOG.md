@@ -28,9 +28,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - Test suite covering audit, backup planning, compatibility, discovery,
   pipeline, smoke harness, journal, local runner, CLI, and the fixture
   matrix.
-- Documentation set: this README, `docs/MIGRATION_RUNBOOK_VM100.md`,
-  `docs/VM100_AUDIT_2026-06-18.md`, `docs/LOCAL_EXECUTION.md`,
-  `docs/PRODUCT_ROADMAP.md`, `docs/FUTURE_PRODUCT_DIRECTION.md`.
+- Documentation set: this README, `docs/LOCAL_EXECUTION.md`,
+  `docs/PRODUCT_ROADMAP.md`, `docs/FUTURE_PRODUCT_DIRECTION.md`,
+  `docs/BACKUP_MANIFESTS.md`.
 - Supported execution engine for the narrow alpha cohort:
   `systemd-binary + local PostgreSQL + nginx + host sshd + Gitea 1.22.x`.
 - Release resolution through the Forgejo Codeberg API for latest `10.x`

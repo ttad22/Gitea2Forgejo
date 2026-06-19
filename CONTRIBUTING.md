@@ -60,7 +60,7 @@ script so you can iterate without reinstalling.
 ## Adding a New Edge-Case Fixture
 
 1. Drop a JSON file under `fixtures/` named `<scenario>-audit.json`.
-2. The shape must match `fixtures/vm100-audit.json`. Top-level keys:
+2. The shape must match `fixtures/systemd-postgres-nginx-audit.json`. Top-level keys:
    `name`, `host`, `gitea_version`, `postgres_version`, `app_ini_path`,
    `data_root`, `service`, `resources`, `features`, `notes`.
 3. Add at least one assertion in `tests/test_fixture_matrix.py` —

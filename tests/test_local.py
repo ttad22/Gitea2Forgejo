@@ -10,7 +10,7 @@ from gitea_forgejo_migrator.preflight import run_local_preflight
 
 def _build_live_audit() -> DeploymentAudit:
     return DeploymentAudit(
-        name="vm100",
+        name="git-example",
         host="localhost",
         gitea_version="1.22.0",
         postgres_version="PostgreSQL 14",

@@ -46,14 +46,20 @@ cutover for the supported cohort described below.
 
 This tool is meant to be portable across common self-hosted Gitea
 deployments, but it does **not** claim universal compatibility with every
-possible environment. The current alpha explicitly models and tests:
+possible environment. The current alpha has:
 
-- systemd or Docker-based installs
-- PostgreSQL and SQLite backends
-- Actions-enabled instances
-- LFS-heavy instances
-- supported `1.22.x -> Forgejo 10.x -> current Forgejo` staging
-- blocked `1.23+ -> current Forgejo` direct-upgrade cohorts
+- one **supported mutating executor cohort**:
+  - `systemd-binary`
+  - local `PostgreSQL`
+  - `nginx`
+  - `host-sshd`
+  - `Gitea 1.22.x`
+- broader **read-only modeled cohorts** used for gating and fixture coverage:
+  - Docker Compose install
+  - SQLite backend
+  - Actions-enabled instance
+  - LFS-heavy instance
+  - blocked `1.23+ -> current Forgejo` direct-upgrade cohort
 
 Anything outside those cohorts should be treated as unsupported until a
 fixture and validation path are added for it.
@@ -231,8 +237,6 @@ service.
 
 ## Documentation
 
-- [`docs/MIGRATION_RUNBOOK_VM100.md`](docs/MIGRATION_RUNBOOK_VM100.md)
-- [`docs/VM100_AUDIT_2026-06-18.md`](docs/VM100_AUDIT_2026-06-18.md)
 - [`docs/LOCAL_EXECUTION.md`](docs/LOCAL_EXECUTION.md)
 - [`docs/PRODUCT_ROADMAP.md`](docs/PRODUCT_ROADMAP.md)
 - [`docs/FUTURE_PRODUCT_DIRECTION.md`](docs/FUTURE_PRODUCT_DIRECTION.md)

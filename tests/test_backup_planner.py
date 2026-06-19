@@ -10,7 +10,7 @@ from tooling.backup import DeploymentInventory, generate_backup_manifest, genera
 @pytest.fixture()
 def inventory() -> DeploymentInventory:
     return DeploymentInventory(
-        instance_name="vm100",
+        instance_name="git-example",
         hostname="git-ops",
         service_name="gitea",
         gitea_version="1.22.0",
@@ -39,7 +39,7 @@ def test_generate_backup_manifest_is_deterministic(inventory: DeploymentInventor
 
     assert manifest.manifest_version == "2026-06-18"
     assert manifest.generated_at == generated_at
-    assert manifest.instance_name == "vm100"
+    assert manifest.instance_name == "git-example"
     assert manifest.artifact_ids() == (
         "postgresql-dump",
         "gitea-config",

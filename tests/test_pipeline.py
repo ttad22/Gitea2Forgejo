@@ -13,14 +13,14 @@ from gitea_forgejo_migrator.simulate import build_simulation_report
 from gitea_forgejo_migrator.smoke import build_smoke_plan
 
 
-FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "vm100-audit.json"
+FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "systemd-postgres-nginx-audit.json"
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
 
 class PipelineTests(unittest.TestCase):
     def test_fixture_loads(self) -> None:
         audit = load_audit(FIXTURE)
-        self.assertEqual(audit.name, "git-ops")
+        self.assertEqual(audit.name, "git-example")
         self.assertEqual(audit.features.repositories, 36)
 
     def test_backup_manifest_contains_db_dump(self) -> None:
@@ -36,7 +36,7 @@ class PipelineTests(unittest.TestCase):
         script = smoke.to_script()
         self.assertIn("systemctl is-active gitea", script)
         self.assertIn("curl -fsS http://127.0.0.1:3000/api/health", script)
-        self.assertIn("https://git.tttmsp.com/", script)
+        self.assertIn("https://git.example.org/", script)
         self.assertIn("ssh_authorized_keys", script)
 
     def test_migration_plan_has_expected_stages(self) -> None:

@@ -12,7 +12,7 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
 def build_report(**overrides: object) -> DeploymentAuditReport:
     payload = {
-        "host_label": "vm100",
+        "host_label": "git-example",
         "service_model": "systemd",
         "gitea_version": "1.22.0",
         "database_backend": "postgresql",

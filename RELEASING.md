@@ -30,7 +30,7 @@ changes**. Concretely:
 ```bash
 # 0. Verify everything green
 pytest -q
-gitea-forgejo-migrator audit fixtures/vm100-audit.json
+gitea-forgejo-migrator audit fixtures/systemd-postgres-nginx-audit.json
 
 # 1. Bump version in setup.cfg + CHANGELOG.md
 #    (and reference the new section in the [Unreleased] link at the
@@ -54,11 +54,11 @@ python -m build
 ## Pre-Release Checklist
 
 - [ ] `pytest -q` is green (61+ tests).
-- [ ] `gitea-forgejo-migrator audit fixtures/vm100-audit.json` says
+- [ ] `gitea-forgejo-migrator audit fixtures/systemd-postgres-nginx-audit.json` says
       `ready: yes`.
-- [ ] `gitea-forgejo-migrator gate fixtures/vm100-audit.json --target forgejo-10`
+- [ ] `gitea-forgejo-migrator gate fixtures/systemd-postgres-nginx-audit.json --target forgejo-10`
       returns `allowed: yes`.
-- [ ] `gitea-forgejo-migrator gate fixtures/vm100-audit.json --target forgejo-current`
+- [ ] `gitea-forgejo-migrator gate fixtures/systemd-postgres-nginx-audit.json --target forgejo-current`
       returns `allowed: no` (correct refusal).
 - [ ] `gitea-forgejo-migrator compatibility --version 1.22.0` says
       `supported: true`.

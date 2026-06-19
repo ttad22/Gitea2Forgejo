@@ -59,7 +59,7 @@ def test_metadata_round_trips_with_various_types() -> None:
 def test_dump_then_load_preserves_chain(tmp_path: Path) -> None:
     journal_path = tmp_path / "journal.json"
     journal = Journal.empty()
-    journal.record(stage="audit", action="load", source="vm100")
+    journal.record(stage="audit", action="load", source="git-example")
     journal.record(stage="compatibility", action="assess")
     journal.record(stage="gate", action="decision", allowed=True)
 

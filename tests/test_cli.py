@@ -17,7 +17,7 @@ def test_cli_audit_json_output(tmp_path, capsys) -> None:
     payload = json.loads(captured.out)
     assert exit_code == 0
     assert payload["audit"]["ready"] is True
-    assert payload["report"]["host_label"] == "vm100"
+    assert payload["report"]["host_label"] == "git-example"
 
 
 def test_cli_gate_fails_for_direct_current_target(tmp_path, capsys) -> None:
