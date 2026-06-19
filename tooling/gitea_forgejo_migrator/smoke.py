@@ -29,8 +29,22 @@ def _infer_external_host(audit: DeploymentAudit) -> str:
     return ""
 
 
+def _infer_authorized_keys_file(audit: DeploymentAudit) -> str:
+    configured = _audit_note_value(audit, "ssh_authorized_keys_file")
+    if configured:
+        return configured
+    data_root = audit.data_root.rstrip("/")
+    candidates = [
+        f"{data_root}/git/.ssh/authorized_keys",
+        f"{data_root}/.ssh/authorized_keys",
+        "/home/git/.ssh/authorized_keys",
+    ]
+    return candidates[0]
+
+
 def build_smoke_plan(audit: DeploymentAudit) -> SmokePlan:
     domain = _infer_external_host(audit)
+    authorized_keys_file = _infer_authorized_keys_file(audit)
     checks = [
         SmokeCheck("service_app", f"systemctl is-active {audit.service.app_service_name}"),
         SmokeCheck("service_proxy", "systemctl is-active nginx"),
@@ -38,6 +52,10 @@ def build_smoke_plan(audit: DeploymentAudit) -> SmokePlan:
         SmokeCheck("web_health", f"curl -fsS http://127.0.0.1:3000/api/health"),
         SmokeCheck("root_ui", f"curl -fsSI http://127.0.0.1:80/ | head -n 1"),
         SmokeCheck("ssh_port", "ss -ltn | grep -q ':22 '"),
+        SmokeCheck(
+            "ssh_authorized_keys",
+            f"test -s {authorized_keys_file!r} && grep -q 'serv key-' {authorized_keys_file!r}",
+        ),
     ]
     if domain:
         checks.extend(

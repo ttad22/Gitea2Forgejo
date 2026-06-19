@@ -32,8 +32,8 @@ so — that is a legitimate answer in this project too.
 ## Local Setup
 
 ```bash
-git clone https://github.com/joshrfr/gitea-forgejo-migrator.git
-cd gitea-forgejo-migrator
+git clone https://github.com/ttad22/Gitea2Forgejo.git
+cd Gitea2Forgejo
 python -m venv .venv
 . .venv/bin/activate
 pip install -e ".[dev]"

@@ -37,6 +37,11 @@ def _count(runner: ShellRunner, sql: str) -> int:
     return int(out.strip() or "0")
 
 
+def _du_mb_if_exists(runner: ShellRunner, path: str) -> float:
+    command = f"if test -e {sh_quote(path)}; then du -sh {sh_quote(path)} | cut -f1; else echo 0; fi"
+    return _size_mb(runner.check(command))
+
+
 def collect_live_audit(
     runner: ShellRunner,
     app_ini_path: str = "/etc/gitea/app.ini",
@@ -58,11 +63,11 @@ def collect_live_audit(
     packages_path = f"{data_root}/data/packages"
     total_path = data_root
 
-    total_mb = _size_mb(runner.check(f"du -sh {sh_quote(total_path)} | cut -f1"))
-    repo_mb = _size_mb(runner.check(f"du -sh {sh_quote(repo_path)} | cut -f1"))
-    attachments_mb = _size_mb(runner.check(f"du -sh {sh_quote(attachments_path)} | cut -f1"))
-    lfs_mb = _size_mb(runner.check(f"du -sh {sh_quote(lfs_path)} | cut -f1"))
-    packages_mb = _size_mb(runner.check(f"du -sh {sh_quote(packages_path)} | cut -f1"))
+    total_mb = _du_mb_if_exists(runner, total_path)
+    repo_mb = _du_mb_if_exists(runner, repo_path)
+    attachments_mb = _du_mb_if_exists(runner, attachments_path)
+    lfs_mb = _du_mb_if_exists(runner, lfs_path)
+    packages_mb = _du_mb_if_exists(runner, packages_path)
 
     service = ServiceTopology(
         install_mode="systemd-binary",
@@ -102,6 +107,7 @@ def collect_live_audit(
             f"domain={config.get('server.domain', '')}",
             f"root_url={config.get('server.root_url', '')}",
             f"lfs_start_server={config.get('server.lfs_start_server', '')}",
+            f"ssh_authorized_keys_file={config.get('server.ssh_authorized_keys_file', '')}",
         ],
     )
 

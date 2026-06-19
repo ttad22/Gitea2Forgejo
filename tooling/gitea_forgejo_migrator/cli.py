@@ -8,6 +8,7 @@ from .audit import evaluate_deployment
 from .backup import build_backup_manifest
 from .compatibility import assess_gitea_to_forgejo
 from .discovery import collect_live_audit
+from .executor import MigrationExecutor, MigrationRequest
 from .io import dump_backup_manifest, dump_json, dump_migration_plan, dump_smoke_script, load_audit
 from .local import write_local_runner
 from .models import DeploymentAuditReport
@@ -156,6 +157,31 @@ def _preflight_local_cmd(args: argparse.Namespace) -> int:
     return exit_code
 
 
+def _migrate_cmd(args: argparse.Namespace) -> int:
+    if not args.yes and not args.dry_run:
+        print("refusing to mutate without --yes")
+        return 2
+
+    request = MigrationRequest(
+        app_ini_path=args.app_ini_path,
+        data_root=args.data_root,
+        work_root=args.work_root,
+        force=args.force,
+        dry_run=args.dry_run,
+        forgejo_10_url=args.forgejo_10_url,
+        forgejo_current_url=args.forgejo_current_url,
+    )
+    executor = MigrationExecutor()
+    try:
+        outcome = executor.migrate(request)
+    except RuntimeError as exc:
+        payload = str(exc)
+        print(payload)
+        return 1
+    print(json.dumps(outcome.to_dict(), indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gitea-forgejo-migrator")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -219,6 +245,20 @@ def build_parser() -> argparse.ArgumentParser:
     local_runner.add_argument("--app-ini-path", default="/etc/gitea/app.ini")
     local_runner.add_argument("--data-root", default="/var/lib/gitea")
     local_runner.set_defaults(func=_emit_local_runner_cmd)
+
+    migrate = sub.add_parser(
+        "migrate",
+        help="Execute the supported in-place migration path for the modeled cohort.",
+    )
+    migrate.add_argument("--app-ini-path", default="/etc/gitea/app.ini")
+    migrate.add_argument("--data-root", default="/var/lib/gitea")
+    migrate.add_argument("--work-root", default="/var/backups/gitea-forgejo-migrator/runs")
+    migrate.add_argument("--forgejo-10-url")
+    migrate.add_argument("--forgejo-current-url")
+    migrate.add_argument("--force", action="store_true")
+    migrate.add_argument("--dry-run", action="store_true")
+    migrate.add_argument("--yes", action="store_true")
+    migrate.set_defaults(func=_migrate_cmd)
 
     return parser
 

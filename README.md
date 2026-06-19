@@ -24,8 +24,9 @@ need to:
 - avoid blind database surgery
 - finish inside a short maintenance window
 
-`GiteaForgejoMigrator` is a **read-only** preflight + planning tool
-that produces the artifacts you need to do that cutover safely:
+`GiteaForgejoMigrator` starts with preflight + planning and now ships a
+first execution engine for the supported cohort. It produces and
+consumes the artifacts needed to do that cutover safely:
 
 | Artifact                   | From                              | Used by              |
 |----------------------------|-----------------------------------|----------------------|
@@ -36,8 +37,10 @@ that produces the artifacts you need to do that cutover safely:
 | staged migration plan      | `migration-plan`                  | the runbook          |
 | smoke-check shell script   | `smoke-plan`                      | post-cutover validation |
 | no-touch dry-run report    | `simulate`                        | you, your reviewer   |
+| staged in-place migration  | `migrate`                         | the maintenance window |
 
-Nothing in this tool **mutates** the source instance.
+The mutating path is intentionally narrow. The tool only executes a real
+cutover for the supported cohort described below.
 
 ## Scope
 
@@ -63,7 +66,7 @@ Python ≥ 3.10 is required.
 ### Option A — install from GitHub (default)
 
 ```bash
-pip install "git+https://github.com/joshrfr/gitea-forgejo-migrator.git@v0.1.0-alpha.1"
+pip install "git+https://github.com/ttad22/Gitea2Forgejo.git@main"
 ```
 
 After this, the `gitea-forgejo-migrator` command is on your `$PATH`.
@@ -71,8 +74,8 @@ After this, the `gitea-forgejo-migrator` command is on your `$PATH`.
 ### Option B — install from a local clone
 
 ```bash
-git clone https://github.com/joshrfr/gitea-forgejo-migrator.git
-cd gitea-forgejo-migrator
+git clone https://github.com/ttad22/Gitea2Forgejo.git
+cd Gitea2Forgejo
 pip install .
 ```
 
@@ -122,19 +125,38 @@ The intended operator flow is:
 Example:
 
 ```bash
-pip install "git+https://github.com/joshrfr/gitea-forgejo-migrator.git@v0.1.0-alpha.1"
+pip install "git+https://github.com/ttad22/Gitea2Forgejo.git@main"
 gitea-forgejo-migrator emit-local-runner \
     --output ./run-preflight.sh \
     --output-dir ./gfm-preflight
 ./run-preflight.sh
 ```
 
-The tool does not mutate the source server for you. An admin still has to:
+## One-Command Supported Migration
+
+For the modeled cohort, the admin can run:
+
+```bash
+sudo env PATH="$HOME/.local/bin:$PATH" \
+  gitea-forgejo-migrator migrate --yes
+```
+
+That command will:
+
+- auto-detect the supported install shape
+- capture backup artifacts into a timestamped run directory
+- resolve the latest Forgejo `10.x` release and the latest current release
+- stage `Gitea 1.22.x -> Forgejo 10.x -> current Forgejo`
+- run critical smoke checks after each stage
+- attempt rollback if a post-backup stage fails
+
+The admin still has to:
 
 - install the package
+- run the mutating path as `root`
 - point it at non-standard `app.ini` or data-root paths if needed
-- ensure read-only inspection binaries are available
-- execute the actual maintenance-window migration steps after reviewing the plan
+- ensure inspection and backup binaries are available
+- review the retained artifacts under the migration run directory
 
 ## Command Surface (alpha)
 
@@ -150,6 +172,7 @@ The tool does not mutate the source server for you. An admin still has to:
 | `collect-live`      | Read-only audit collected via SSH or on-host shell                |
 | `emit-local-runner` | Emit a server-local wrapper the admin runs by hand                |
 | `preflight-local`   | Run the audit + plan + smoke pipeline locally on the source host  |
+| `migrate`           | Execute the supported staged in-place migration with rollback     |
 
 ## Compatibility Matrix (alpha)
 
@@ -182,8 +205,8 @@ The matrix lives in code at
 
 The CLI is **terminal-only** in alpha. There is no GUI, no daemon, no
 agent installed on the source host. The host-local runner script
-(`emit-local-runner`) is the one exception, and it is a generated
-artifact, not a service.
+(`emit-local-runner`) is still generated on demand, not installed as a
+service.
 
 ## Repository Layout
 
@@ -202,7 +225,7 @@ artifact, not a service.
 ├── docs/                  ← runbooks and product direction
 ├── fixtures/              ← edge-case audit JSONs
 ├── scripts/               ← read-only transport helpers
-├── tests/                 ← pytest suite (61 tests)
+├── tests/                 ← pytest suite
 └── tooling/gitea_forgejo_migrator/   ← source package
 ```
 
@@ -221,9 +244,9 @@ pip install -e ".[dev]"
 pytest -q
 ```
 
-`pytest` runs 61 tests covering audit, compatibility, backup planning,
-discovery, pipeline, smoke harness, journal, local runner, CLI
-surface, and every fixture in the matrix.
+`pytest` covers audit, compatibility, backup planning, discovery,
+pipeline, smoke harness, journal, local runner, release resolution,
+execution, CLI surface, and every fixture in the matrix.
 
 ## License
 

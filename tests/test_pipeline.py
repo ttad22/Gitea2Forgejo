@@ -37,6 +37,7 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("systemctl is-active gitea", script)
         self.assertIn("curl -fsS http://127.0.0.1:3000/api/health", script)
         self.assertIn("https://git.tttmsp.com/", script)
+        self.assertIn("ssh_authorized_keys", script)
 
     def test_migration_plan_has_expected_stages(self) -> None:
         audit = load_audit(FIXTURE)

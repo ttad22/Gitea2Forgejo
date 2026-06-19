@@ -7,14 +7,13 @@ name = "gitea-forgejo-migrator"
 version = "0.1.0-alpha.1"
 description = "Operator-first preflight, gating, and staging plan for in-place Gitea to Forgejo migrations."
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "BSD-3-Clause"
 authors = [{ name = "GiteaForgejoMigrator contributors" }]
 keywords = ["gitea", "forgejo", "migration", "preflight", "sysadmin", "git", "smoke-test", "same-vm"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: System Administrators",
-    "License :: OSI Approved :: BSD License",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -32,11 +31,11 @@ dev = ["pytest>=7.0"]
 gitea-forgejo-migrator = "gitea_forgejo_migrator.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/joshrfr/gitea-forgejo-migrator"
-Documentation = "https://github.com/joshrfr/gitea-forgejo-migrator/blob/main/README.md"
-Source = "https://github.com/joshrfr/gitea-forgejo-migrator"
-Issues = "https://github.com/joshrfr/gitea-forgejo-migrator/issues"
-Changelog = "https://github.com/joshrfr/gitea-forgejo-migrator/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/ttad22/Gitea2Forgejo"
+Documentation = "https://github.com/ttad22/Gitea2Forgejo/blob/main/README.md"
+Source = "https://github.com/ttad22/Gitea2Forgejo"
+Issues = "https://github.com/ttad22/Gitea2Forgejo/issues"
+Changelog = "https://github.com/ttad22/Gitea2Forgejo/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 package-dir = { "" = "tooling" }
