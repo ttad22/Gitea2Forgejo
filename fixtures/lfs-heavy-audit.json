@@ -30,6 +30,8 @@
     "packages": 0
   },
   "notes": [
+    "domain=git-lfs.example.org",
+    "root_url=https://git-lfs.example.org/",
     "LFS dominates storage footprint and must be smoke-tested explicitly"
   ]
 }

@@ -30,6 +30,8 @@
     "packages": 0
   },
   "notes": [
+    "domain=actions.example.internal",
+    "root_url=https://actions.example.internal/",
     "actions-heavy instance; runner continuity is critical"
   ]
 }

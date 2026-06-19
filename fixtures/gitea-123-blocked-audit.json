@@ -30,6 +30,8 @@
     "packages": 0
   },
   "notes": [
+    "domain=blocked.example.org",
+    "root_url=https://blocked.example.org/",
     "outside the officially supported transparent in-place migration cohort"
   ]
 }

@@ -39,6 +39,22 @@ that produces the artifacts you need to do that cutover safely:
 
 Nothing in this tool **mutates** the source instance.
 
+## Scope
+
+This tool is meant to be portable across common self-hosted Gitea
+deployments, but it does **not** claim universal compatibility with every
+possible environment. The current alpha explicitly models and tests:
+
+- systemd or Docker-based installs
+- PostgreSQL and SQLite backends
+- Actions-enabled instances
+- LFS-heavy instances
+- supported `1.22.x -> Forgejo 10.x -> current Forgejo` staging
+- blocked `1.23+ -> current Forgejo` direct-upgrade cohorts
+
+Anything outside those cohorts should be treated as unsupported until a
+fixture and validation path are added for it.
+
 ## Installation
 
 The tool is a pure-Python package with **no runtime dependencies**.
@@ -47,7 +63,7 @@ Python ≥ 3.10 is required.
 ### Option A — install from GitHub (default)
 
 ```bash
-pip install "git+https://github.com/TopTier_Technologies/gitea-forgejo-migrator.git@v0.1.0-alpha.1"
+pip install "git+https://github.com/joshrfr/gitea-forgejo-migrator.git@v0.1.0-alpha.1"
 ```
 
 After this, the `gitea-forgejo-migrator` command is on your `$PATH`.
@@ -55,35 +71,10 @@ After this, the `gitea-forgejo-migrator` command is on your `$PATH`.
 ### Option B — install from a local clone
 
 ```bash
-git clone https://github.com/TopTier_Technologies/gitea-forgejo-migrator.git
+git clone https://github.com/joshrfr/gitea-forgejo-migrator.git
 cd gitea-forgejo-migrator
 pip install .
 ```
-
-### Option C — install from a Node-based package mirror
-
-If your environment fetches Python tools through an `npm`-style store,
-add a tiny shim that delegates to `pip`:
-
-```json
-{
-  "name": "gitea-forgejo-migrator",
-  "version": "0.1.0-alpha.1",
-  "bin": { "gitea-forgejo-migrator": "node_modules/.bin/gfm-passthrough" }
-}
-```
-
-with `node_modules/.bin/gfm-passthrough` set to:
-
-```javascript
-#!/usr/bin/env node
-const { spawn } = require('child_process');
-const py = spawn('python3', ['-m', 'gitea_forgejo_migrator.cli', ...process.argv.slice(2)], { stdio: 'inherit' });
-py.on('exit', (c) => process.exit(c ?? 0));
-```
-
-Treat this option as a fallback. Options A and B are the supported
-paths for this alpha.
 
 ## Quick Start
 
@@ -118,6 +109,32 @@ Gitea 1.22.x  →  Forgejo 10.x  →  current Forgejo
 The `gate` command will refuse to give you a direct path to current
 Forgejo from Gitea 1.23+. This refusal is intentional and matches
 upstream Forgejo guidance.
+
+## Admin-Run Path
+
+The intended operator flow is:
+
+1. install the package on the source host
+2. run `emit-local-runner`
+3. execute the generated wrapper locally
+4. review the generated audit, gate, backup, plan, and smoke artifacts
+
+Example:
+
+```bash
+pip install "git+https://github.com/joshrfr/gitea-forgejo-migrator.git@v0.1.0-alpha.1"
+gitea-forgejo-migrator emit-local-runner \
+    --output ./run-preflight.sh \
+    --output-dir ./gfm-preflight
+./run-preflight.sh
+```
+
+The tool does not mutate the source server for you. An admin still has to:
+
+- install the package
+- point it at non-standard `app.ini` or data-root paths if needed
+- ensure read-only inspection binaries are available
+- execute the actual maintenance-window migration steps after reviewing the plan
 
 ## Command Surface (alpha)
 

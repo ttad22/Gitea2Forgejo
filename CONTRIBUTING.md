@@ -32,7 +32,7 @@ so — that is a legitimate answer in this project too.
 ## Local Setup
 
 ```bash
-git clone https://github.com/TopTier_Technologies/gitea-forgejo-migrator.git
+git clone https://github.com/joshrfr/gitea-forgejo-migrator.git
 cd gitea-forgejo-migrator
 python -m venv .venv
 . .venv/bin/activate

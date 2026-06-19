@@ -30,6 +30,8 @@
     "packages": 8
   },
   "notes": [
+    "domain=git.containers.example.net",
+    "root_url=https://git.containers.example.net/",
     "containerized install behind traefik",
     "requires container-aware service cutover validation"
   ]

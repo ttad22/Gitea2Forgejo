@@ -6,8 +6,8 @@ import sys
 import unittest
 from pathlib import Path
 
-from tooling.smoke.harness import SimulationHarness
-from tooling.smoke.planner import PlanStage, build_plan
+from smoke.harness import SimulationHarness
+from smoke.planner import PlanStage, build_plan
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -76,7 +76,7 @@ class SmokeCliTests(unittest.TestCase):
             [
                 sys.executable,
                 "-m",
-                "tooling.smoke.cli",
+                "smoke.cli",
                 "plan",
                 "--stage",
                 PlanStage.POST_CUTOVER.value,
@@ -96,7 +96,7 @@ class SmokeCliTests(unittest.TestCase):
             [
                 sys.executable,
                 "-m",
-                "tooling.smoke.cli",
+                "smoke.cli",
                 "run",
                 "--stage",
                 PlanStage.POST_CUTOVER.value,

@@ -42,4 +42,4 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   (`emit-local-runner`) is generated on demand, not installed as a
   service.
 
-[0.1.0-alpha.1]: https://github.com/TopTier_Technologies/gitea-forgejo-migrator/releases/tag/v0.1.0-alpha.1
+[0.1.0-alpha.1]: https://github.com/joshrfr/gitea-forgejo-migrator/releases/tag/v0.1.0-alpha.1

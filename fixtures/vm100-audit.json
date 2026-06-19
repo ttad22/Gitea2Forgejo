@@ -30,6 +30,8 @@
     "packages": 0
   },
   "notes": [
+    "domain=git.tttmsp.com",
+    "root_url=https://git.tttmsp.com/",
     "nginx terminates on :80 and proxies to Gitea on :3000",
     "LFS enabled in config but effectively unused",
     "Actions and packages currently unused"

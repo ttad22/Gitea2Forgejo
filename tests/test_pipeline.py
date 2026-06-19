@@ -36,6 +36,7 @@ class PipelineTests(unittest.TestCase):
         script = smoke.to_script()
         self.assertIn("systemctl is-active gitea", script)
         self.assertIn("curl -fsS http://127.0.0.1:3000/api/health", script)
+        self.assertIn("https://git.tttmsp.com/", script)
 
     def test_migration_plan_has_expected_stages(self) -> None:
         audit = load_audit(FIXTURE)
@@ -71,6 +72,7 @@ class PipelineTests(unittest.TestCase):
         script = smoke.to_script()
         self.assertIn("curl -fsS http://127.0.0.1:3000/api/health", script)
         self.assertIn("systemctl is-active gitea", script)
+        self.assertIn("https://actions.example.internal/", script)
 
     def test_lfs_heavy_fixture_backup_manifest_includes_lfs_archive(self) -> None:
         audit = load_audit(FIXTURES / "lfs-heavy-audit.json")

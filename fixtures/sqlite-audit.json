@@ -30,6 +30,8 @@
     "packages": 0
   },
   "notes": [
+    "domain=git.sqlite.example.net",
+    "root_url=https://git.sqlite.example.net/",
     "sqlite backend requires explicit export/restore strategy"
   ]
 }
