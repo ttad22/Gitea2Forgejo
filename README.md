@@ -153,6 +153,8 @@ That command will:
 - capture backup artifacts into a timestamped run directory
 - preserve the live PostgreSQL data, repository root, config, custom data,
   attachments, SSH authorized-keys material, and LFS content for rollback
+- harvest additional existing absolute paths declared in `app.ini` and preserve
+  them as config-bound artifacts when they exist on disk
 - resolve the latest Forgejo `10.x` release and the latest current release
 - stage `Gitea 1.22.x -> Forgejo 10.x -> current Forgejo`
 - run critical smoke checks after each stage

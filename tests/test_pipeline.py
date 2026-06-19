@@ -47,6 +47,15 @@ class PipelineTests(unittest.TestCase):
         assert "ssh_authorized_keys" in labels
         assert "repository_root" not in labels
 
+    def test_backup_manifest_includes_discovered_config_paths(self) -> None:
+        audit = load_audit(FIXTURE)
+        audit.notes.append("preserve_path:file:server.cert_file=/etc/gitea/tls/server.crt")
+        audit.notes.append("preserve_path:directory:mailer.template_dir=/opt/gitea-mail/templates")
+        manifest = build_backup_manifest(audit)
+        labels = {item.label for item in manifest.items}
+        assert "config_server_cert_file" in labels
+        assert "config_mailer_template_dir" in labels
+
     def test_migration_plan_has_expected_stages(self) -> None:
         audit = load_audit(FIXTURE)
         plan = build_migration_plan(audit)

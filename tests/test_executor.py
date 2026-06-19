@@ -52,6 +52,8 @@ def _audit() -> DeploymentAudit:
             "attachments_path=/srv/git/attachments",
             "packages_path=/srv/git/packages",
             "ssh_authorized_keys_file=/var/lib/gitea/.ssh/authorized_keys",
+            "preserve_path:file:server.cert_file=/etc/gitea/tls/server.crt",
+            "preserve_path:directory:mailer.template_dir=/opt/gitea-mail/templates",
         ],
     )
 
@@ -176,6 +178,11 @@ def _fake_audit(monkeypatch):
     monkeypatch.setattr("gitea_forgejo_migrator.executor.collect_live_audit", lambda *args, **kwargs: _audit())
 
 
+@pytest.fixture(autouse=True)
+def _no_journal_disk_writes(monkeypatch):
+    monkeypatch.setattr("gitea_forgejo_migrator.journal.Journal.dump", lambda self, path: None)
+
+
 def test_migrate_successful_supported_cohort(tmp_path: Path) -> None:
     runner = FakeRunner()
     executor = MigrationExecutor(runner=runner, release_resolver=FakeResolver())
@@ -198,6 +205,14 @@ def test_migrate_successful_supported_cohort(tmp_path: Path) -> None:
     )
     assert any(
         "ssh_authorized_keys.tar.gz" in command and "-C '/var/lib/gitea/.ssh'" in command and "authorized_keys" in command
+        for command in runner.commands
+    )
+    assert any(
+        "config_server_cert_file.tar.gz" in command and "-C '/etc/gitea/tls'" in command and "server.crt" in command
+        for command in runner.commands
+    )
+    assert any(
+        "config_mailer_template_dir.tar.gz" in command and "-C '/opt/gitea-mail'" in command and "templates" in command
         for command in runner.commands
     )
 

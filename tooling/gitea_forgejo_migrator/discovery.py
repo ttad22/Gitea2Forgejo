@@ -42,6 +42,49 @@ def _du_mb_if_exists(runner: ShellRunner, path: str) -> float:
     return _size_mb(runner.check(command))
 
 
+def _is_absolute_unix_path(value: str) -> bool:
+    candidate = value.strip()
+    return candidate.startswith("/") and "://" not in candidate
+
+
+def _discover_preserve_paths(
+    runner: ShellRunner,
+    config: dict[str, str],
+    *,
+    app_ini_path: str,
+    data_root: str,
+) -> list[str]:
+    static_covered_paths = {
+        PurePosixPath(app_ini_path),
+        PurePosixPath(data_root),
+        PurePosixPath(f"{data_root}/custom"),
+        PurePosixPath(f"{data_root}/data"),
+        PurePosixPath(f"{data_root}/lfs"),
+        PurePosixPath(f"{data_root}/log"),
+    }
+    discovered: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    for key in sorted(config):
+        value = (config.get(key) or "").strip()
+        if not _is_absolute_unix_path(value):
+            continue
+        path = PurePosixPath(value)
+        if path in static_covered_paths:
+            continue
+        if runner.run(f"test -d {sh_quote(value)}").returncode == 0:
+            kind = "directory"
+        elif runner.run(f"test -f {sh_quote(value)}").returncode == 0:
+            kind = "file"
+        else:
+            continue
+        marker = (kind, value)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        discovered.append(f"preserve_path:{kind}:{key}={value}")
+    return discovered
+
+
 def collect_live_audit(
     runner: ShellRunner,
     app_ini_path: str = "/etc/gitea/app.ini",
@@ -113,6 +156,7 @@ def collect_live_audit(
             f"repository_root={repo_path}",
             f"attachments_path={attachments_path}",
             f"packages_path={packages_path}",
+            *_discover_preserve_paths(runner, config, app_ini_path=app_ini_path, data_root=data_root),
         ],
     )
 

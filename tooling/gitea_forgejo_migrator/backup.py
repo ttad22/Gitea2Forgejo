@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import PurePosixPath
 
 from .models import BackupItem, BackupManifest, DeploymentAudit
@@ -35,6 +36,27 @@ def _is_within(path: str, parent: str) -> bool:
         return True
     except ValueError:
         return False
+
+
+def _slug(label: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")
+    return slug or "path"
+
+
+def _discovered_preserve_paths(audit: DeploymentAudit) -> list[tuple[str, str, str]]:
+    discovered: list[tuple[str, str, str]] = []
+    prefix = "preserve_path:"
+    for note in audit.notes:
+        if not note.startswith(prefix):
+            continue
+        payload = note[len(prefix) :]
+        try:
+            kind, remainder = payload.split(":", 1)
+            key, path = remainder.split("=", 1)
+        except ValueError:
+            continue
+        discovered.append((kind.strip(), key.strip(), path.strip()))
+    return discovered
 
 
 def build_backup_manifest(audit: DeploymentAudit) -> BackupManifest:
@@ -126,6 +148,17 @@ def build_backup_manifest(audit: DeploymentAudit) -> BackupManifest:
         path=f"{data_root}/log",
         required=False,
     )
+    for kind, key, path in _discovered_preserve_paths(audit):
+        label = f"config_{_slug(key)}"
+        archive_kind = "directory_archive" if kind == "directory" else "file_archive"
+        _add_unique_path_item(
+            items,
+            seen_paths,
+            label=label,
+            kind=archive_kind,
+            path=path,
+            required=False,
+        )
     return BackupManifest(
         deployment_name=audit.name,
         backup_root_hint="/var/backups/gitea-forgejo-migrator",
