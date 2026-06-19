@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import unittest
@@ -12,6 +13,10 @@ from smoke.planner import PlanStage, build_plan
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_DIR = REPO_ROOT / "fixtures" / "smoke"
+SOURCE_ENV = {
+    **os.environ,
+    "PYTHONPATH": str(REPO_ROOT / "tooling"),
+}
 
 
 class SmokePlannerTests(unittest.TestCase):
@@ -85,6 +90,7 @@ class SmokeCliTests(unittest.TestCase):
             check=True,
             capture_output=True,
             text=True,
+            env=SOURCE_ENV,
         )
 
         payload = json.loads(completed.stdout)
@@ -107,6 +113,7 @@ class SmokeCliTests(unittest.TestCase):
             check=False,
             capture_output=True,
             text=True,
+            env=SOURCE_ENV,
         )
 
         payload = json.loads(completed.stdout)
