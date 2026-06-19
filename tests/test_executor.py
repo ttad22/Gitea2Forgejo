@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import shlex
 
 import pytest
 
@@ -46,6 +47,10 @@ def _audit() -> DeploymentAudit:
             "domain=git.example.org",
             "root_url=https://git.example.org/",
             "lfs_start_server=false",
+            "database_name=codeforge",
+            "repository_root=/srv/git/repositories",
+            "attachments_path=/srv/git/attachments",
+            "packages_path=/srv/git/packages",
             "ssh_authorized_keys_file=/var/lib/gitea/.ssh/authorized_keys",
         ],
     )
@@ -65,7 +70,10 @@ class FakeRunner:
         stdout = self._stdout_for(command)
         stderr = ""
 
-        if command == "test -e '/var/lib/gitea/lfs'":
+        if command in {
+            "test -e '/var/lib/gitea/lfs'",
+            "test -e '/srv/git/packages'",
+        }:
             returncode = 1
 
         if "install -m 0755" in command and "/releases/forgejo-10/forgejo-10.0.3-linux-amd64" in command:
@@ -86,6 +94,8 @@ class FakeRunner:
             if self.current_binary_version == "forgejo-current":
                 returncode = 1
                 stderr = "simulated health failure"
+
+        self._materialize_artifacts(command)
 
         return type("Result", (), {"stdout": stdout, "stderr": stderr, "returncode": returncode})()
 
@@ -116,6 +126,28 @@ class FakeRunner:
             if "forgejo-15.0.3-linux-amd64" in command:
                 return "Forgejo version 15.0.3 built with go1.23\n"
         return ""
+
+    def _materialize_artifacts(self, command: str) -> None:
+        if command.startswith("cp "):
+            target = Path(shlex.split(command)[-1])
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("binary-backup", encoding="utf-8")
+            return
+        if " pg_dump -Fc " in command and " > " in command:
+            target = Path(command.split(" > ", 1)[1].strip().strip("'"))
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("pg-dump", encoding="utf-8")
+            return
+        if command.startswith("tar czf "):
+            target = Path(shlex.split(command)[2])
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("archive", encoding="utf-8")
+            return
+        if command.startswith("systemctl cat ") and " > " in command:
+            target = Path(command.split(" > ", 1)[1].strip().strip("'"))
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("[Unit]\nDescription=Gitea\n", encoding="utf-8")
+            return
 
 
 class FakeResolver:
@@ -156,10 +188,18 @@ def test_migrate_successful_supported_cohort(tmp_path: Path) -> None:
     assert Path(outcome.outcome_path).exists()
     payload = json.loads(Path(outcome.outcome_path).read_text(encoding="utf-8"))
     assert payload["success"] is True
-    assert any("pg_dump" in command for command in runner.commands)
+    assert any("pg_dump -Fc 'codeforge'" in command for command in runner.commands)
     assert any("/releases/forgejo-10/forgejo-10.0.3-linux-amd64" in command for command in runner.commands)
     assert any("/releases/forgejo-current/forgejo-15.0.3-linux-amd64" in command for command in runner.commands)
     assert not any("lfs.tar.gz" in command and "tar czf" in command for command in runner.commands)
+    assert any(
+        "repository_root.tar.gz" in command and "-C '/srv/git'" in command and "repositories" in command
+        for command in runner.commands
+    )
+    assert any(
+        "ssh_authorized_keys.tar.gz" in command and "-C '/var/lib/gitea/.ssh'" in command and "authorized_keys" in command
+        for command in runner.commands
+    )
 
 
 def test_migrate_rolls_back_on_failure(tmp_path: Path) -> None:
@@ -173,7 +213,7 @@ def test_migrate_rolls_back_on_failure(tmp_path: Path) -> None:
     assert payload["success"] is False
     assert payload["rollback_performed"] is True
     assert runner.rollback_seen is True
-    assert any("pg_restore" in command for command in runner.commands)
+    assert any("pg_restore -d 'codeforge'" in command for command in runner.commands)
 
 
 def test_migrate_requires_yes_at_cli(tmp_path: Path, capsys) -> None:

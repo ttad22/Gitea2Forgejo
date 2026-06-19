@@ -39,6 +39,14 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("https://git.example.org/", script)
         self.assertIn("ssh_authorized_keys", script)
 
+    def test_backup_manifest_preserves_supported_cohort_paths(self) -> None:
+        audit = load_audit(FIXTURE)
+        manifest = build_backup_manifest(audit)
+        labels = {item.label for item in manifest.items}
+        assert "data" in labels
+        assert "ssh_authorized_keys" in labels
+        assert "repository_root" not in labels
+
     def test_migration_plan_has_expected_stages(self) -> None:
         audit = load_audit(FIXTURE)
         plan = build_migration_plan(audit)

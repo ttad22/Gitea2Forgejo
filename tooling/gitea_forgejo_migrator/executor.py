@@ -13,7 +13,7 @@ from .compatibility import assess_gitea_to_forgejo
 from .discovery import collect_live_audit, sh_quote
 from .io import dump_backup_manifest, dump_json, dump_migration_plan, dump_smoke_script
 from .journal import Journal
-from .models import CompatibilityAssessment, DeploymentAudit, MigrationPlan, SmokePlan
+from .models import BackupItem, BackupManifest, CompatibilityAssessment, DeploymentAudit, MigrationPlan, SmokePlan
 from .planning import build_migration_plan
 from .preflight import _report_from_audit
 from .releases import ForgejoRelease, ReleaseBundle, ReleaseResolver
@@ -64,6 +64,14 @@ class MigrationOutcome:
 
 
 class SupportedCohortAdapter:
+    @staticmethod
+    def _note_value(audit: DeploymentAudit, key: str) -> str:
+        prefix = f"{key}="
+        for note in audit.notes:
+            if note.startswith(prefix):
+                return note[len(prefix) :].strip()
+        return ""
+
     def validate(self, audit: DeploymentAudit) -> None:
         problems: list[str] = []
         if not audit.service.install_mode.startswith("systemd"):
@@ -84,11 +92,12 @@ class SupportedCohortAdapter:
         binary_path = runner.check("command -v gitea")
         arch = runner.check("uname -m")
         hostname = runner.check("hostname")
+        database_name = self._note_value(audit, "database_name") or "gitea"
         return RuntimeLayout(
             binary_path=binary_path,
             binary_dir=str(Path(binary_path).parent),
             service_name=audit.service.app_service_name,
-            database_name="gitea",
+            database_name=database_name,
             reverse_proxy=audit.service.reverse_proxy,
             ssh_mode=audit.service.ssh_mode,
             arch=arch,
@@ -141,7 +150,7 @@ class MigrationExecutor:
         self._record(journal, paths["journal"], stage="init", action="artifacts-written", work_dir=str(work_dir))
 
         try:
-            self._backup(audit, layout, request, paths, journal)
+            self._backup(audit, layout, request, paths, backup_manifest, journal)
             stages_completed.append("backup")
             self._record(journal, paths["journal"], stage="backup", action="completed")
 
@@ -194,7 +203,7 @@ class MigrationExecutor:
         except Exception as exc:
             self._record(journal, paths["journal"], stage="failure", action="captured", error=str(exc))
             if not request.dry_run:
-                rolled_back = self._rollback(layout, audit, request, paths, journal)
+                rolled_back = self._rollback(layout, audit, request, paths, backup_manifest, journal)
             outcome = self._finalize_outcome(
                 success=False,
                 rollback_performed=rolled_back,
@@ -296,22 +305,76 @@ class MigrationExecutor:
         layout: RuntimeLayout,
         request: MigrationRequest,
         paths: dict[str, Path],
+        backup_manifest: BackupManifest,
         journal: Journal,
     ) -> None:
         self._ensure_dir(paths["backup_dir"])
         self._ensure_dir(paths["release_dir"])
         self.runner.check(f"cp {sh_quote(layout.binary_path)} {sh_quote(str(paths['backup_dir'] / 'gitea-original.bin'))}")
         self._record(journal, paths["journal"], stage="backup", action="binary-copied")
-        self.runner.check(
-            f"sudo -u postgres pg_dump -Fc {sh_quote(layout.database_name)} > {sh_quote(str(paths['backup_dir'] / 'gitea.dump'))}"
-        )
-        self._record(journal, paths["journal"], stage="backup", action="database-dumped")
-        self._archive_path(audit.app_ini_path, paths["backup_dir"] / "app-ini.tar.gz")
-        self._archive_path(f"{audit.data_root.rstrip('/')}/custom", paths["backup_dir"] / "custom.tar.gz")
-        self._archive_path(f"{audit.data_root.rstrip('/')}/data", paths["backup_dir"] / "data.tar.gz")
-        self._archive_path_if_exists(f"{audit.data_root.rstrip('/')}/lfs", paths["backup_dir"] / "lfs.tar.gz")
+        for item in backup_manifest.items:
+            self._capture_backup_item(item, layout, paths, journal)
         self.runner.check(f"systemctl cat {sh_quote(layout.service_name)} > {sh_quote(str(paths['backup_dir'] / 'service.unit'))}")
         self._record(journal, paths["journal"], stage="backup", action="filesystem-archived")
+
+    def _capture_backup_item(
+        self,
+        item: BackupItem,
+        layout: RuntimeLayout,
+        paths: dict[str, Path],
+        journal: Journal,
+    ) -> None:
+        if item.kind == "hypervisor_snapshot":
+            self._record(
+                journal,
+                paths["journal"],
+                stage="backup",
+                action="hypervisor-snapshot-required",
+                label=item.label,
+                command=item.command or "",
+            )
+            return
+        if item.kind == "database_dump":
+            dump_path = self._backup_item_path(paths["backup_dir"], item)
+            self.runner.check(
+                f"sudo -u postgres pg_dump -Fc {sh_quote(layout.database_name)} > {sh_quote(str(dump_path))}"
+            )
+            self._record(journal, paths["journal"], stage="backup", action="database-dumped", label=item.label)
+            return
+        if item.kind in {"file_archive", "directory_archive"}:
+            archive_path = self._backup_item_path(paths["backup_dir"], item)
+            if item.required:
+                self._archive_path(item.path or "", archive_path)
+                self._record(
+                    journal,
+                    paths["journal"],
+                    stage="backup",
+                    action="path-archived",
+                    label=item.label,
+                    source_path=item.path or "",
+                )
+            else:
+                if self.runner.run(f"test -e {sh_quote(item.path or '')}").returncode == 0:
+                    self._archive_path(item.path or "", archive_path)
+                    self._record(
+                        journal,
+                        paths["journal"],
+                        stage="backup",
+                        action="path-archived",
+                        label=item.label,
+                        source_path=item.path or "",
+                    )
+                else:
+                    self._record(
+                        journal,
+                        paths["journal"],
+                        stage="backup",
+                        action="optional-path-missing",
+                        label=item.label,
+                        source_path=item.path or "",
+                    )
+            return
+        raise RuntimeError(f"unsupported backup item kind: {item.kind}")
 
     def _archive_path(self, source: str, target: Path) -> None:
         source_path = Path(source)
@@ -320,11 +383,6 @@ class MigrationExecutor:
         self.runner.check(
             f"tar czf {sh_quote(str(target))} -C {sh_quote(str(parent))} {sh_quote(name)}"
         )
-
-    def _archive_path_if_exists(self, source: str, target: Path) -> None:
-        if self.runner.run(f"test -e {sh_quote(source)}").returncode != 0:
-            return
-        self._archive_path(source, target)
 
     def _verify_release_binary(
         self,
@@ -356,6 +414,7 @@ class MigrationExecutor:
         audit: DeploymentAudit,
         request: MigrationRequest,
         paths: dict[str, Path],
+        backup_manifest: BackupManifest,
         journal: Journal,
     ) -> bool:
         try:
@@ -364,29 +423,56 @@ class MigrationExecutor:
             self.runner.run(
                 f"install -m 0755 {sh_quote(str(paths['backup_dir'] / 'gitea-original.bin'))} {sh_quote(layout.binary_path)}"
             )
-            self.runner.run(
-                f"sudo -u postgres dropdb --if-exists {sh_quote(layout.database_name)} && "
-                f"sudo -u postgres createdb {sh_quote(layout.database_name)} && "
-                f"sudo -u postgres pg_restore -d {sh_quote(layout.database_name)} {sh_quote(str(paths['backup_dir'] / 'gitea.dump'))}"
-            )
-            self.runner.run(
-                f"tar xzf {sh_quote(str(paths['backup_dir'] / 'app-ini.tar.gz'))} -C {sh_quote(str(Path(audit.app_ini_path).parent))}"
-            )
-            self.runner.run(
-                f"tar xzf {sh_quote(str(paths['backup_dir'] / 'custom.tar.gz'))} -C {sh_quote(audit.data_root.rstrip('/'))}"
-            )
-            self.runner.run(
-                f"tar xzf {sh_quote(str(paths['backup_dir'] / 'data.tar.gz'))} -C {sh_quote(audit.data_root.rstrip('/'))}"
-            )
-            self.runner.run(
-                f"tar xzf {sh_quote(str(paths['backup_dir'] / 'lfs.tar.gz'))} -C {sh_quote(audit.data_root.rstrip('/'))}"
-            )
+            for item in backup_manifest.items:
+                self._restore_backup_item(item, layout, paths, journal)
             self.runner.run(f"systemctl start {sh_quote(layout.service_name)}")
             self._record(journal, paths["journal"], stage="rollback", action="completed")
             return True
         except Exception as exc:
             self._record(journal, paths["journal"], stage="rollback", action="failed", error=str(exc))
             return False
+
+    def _restore_backup_item(
+        self,
+        item: BackupItem,
+        layout: RuntimeLayout,
+        paths: dict[str, Path],
+        journal: Journal,
+    ) -> None:
+        if item.kind == "hypervisor_snapshot":
+            return
+        if item.kind == "database_dump":
+            dump_path = self._backup_item_path(paths["backup_dir"], item)
+            self.runner.run(
+                f"sudo -u postgres dropdb --if-exists {sh_quote(layout.database_name)} && "
+                f"sudo -u postgres createdb {sh_quote(layout.database_name)} && "
+                f"sudo -u postgres pg_restore -d {sh_quote(layout.database_name)} {sh_quote(str(dump_path))}"
+            )
+            self._record(journal, paths["journal"], stage="rollback", action="database-restored", label=item.label)
+            return
+        if item.kind in {"file_archive", "directory_archive"}:
+            archive_path = self._backup_item_path(paths["backup_dir"], item)
+            if not archive_path.exists():
+                if item.required:
+                    raise RuntimeError(f"required backup archive missing for {item.label}: {archive_path}")
+                return
+            restore_parent = str(Path(item.path or "/").parent)
+            self.runner.run(f"tar xzf {sh_quote(str(archive_path))} -C {sh_quote(restore_parent)}")
+            self._record(
+                journal,
+                paths["journal"],
+                stage="rollback",
+                action="path-restored",
+                label=item.label,
+                source_path=item.path or "",
+            )
+            return
+        raise RuntimeError(f"unsupported backup item kind: {item.kind}")
+
+    def _backup_item_path(self, backup_dir: Path, item: BackupItem) -> Path:
+        if item.kind == "database_dump":
+            return backup_dir / f"{item.label}.dump"
+        return backup_dir / f"{item.label}.tar.gz"
 
     def _artifact_paths(self, work_dir: Path) -> dict[str, Path]:
         return {

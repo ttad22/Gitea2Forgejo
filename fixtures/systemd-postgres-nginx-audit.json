@@ -32,6 +32,9 @@
   "notes": [
     "domain=git.example.org",
     "root_url=https://git.example.org/",
+    "database_name=gitea",
+    "repository_root=/var/lib/gitea/data/gitea-repositories",
+    "ssh_authorized_keys_file=/var/lib/gitea/.ssh/authorized_keys",
     "nginx terminates on :80 and proxies to Gitea on :3000",
     "LFS enabled in config but effectively unused",
     "Actions and packages currently unused"

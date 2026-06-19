@@ -32,8 +32,8 @@ def _size_mb(raw: str) -> float:
     return number / (1024.0 * 1024.0)
 
 
-def _count(runner: ShellRunner, sql: str) -> int:
-    out = runner.check(f"sudo -u postgres psql -d gitea -Atc {sql!r}")
+def _count(runner: ShellRunner, database_name: str, sql: str) -> int:
+    out = runner.check(f"sudo -u postgres psql -d {sh_quote(database_name)} -Atc {sql!r}")
     return int(out.strip() or "0")
 
 
@@ -51,16 +51,17 @@ def collect_live_audit(
     app_ini = runner.check(f"sed -n '1,240p' {sh_quote(app_ini_path)}")
     config = _parse_app_ini(app_ini)
     gitea_version_raw = runner.check("gitea --version 2>/dev/null || forgejo --version 2>/dev/null")
-    postgres_version = runner.check("sudo -u postgres psql -d gitea -Atc 'select version();'")
+    database_name = config.get("database.name", "gitea") or "gitea"
+    postgres_version = runner.check(f"sudo -u postgres psql -d {sh_quote(database_name)} -Atc 'select version();'")
     nginx_active = runner.check("systemctl is-active nginx")
     gitea_active = runner.check("systemctl is-active gitea || systemctl is-active forgejo")
     _ = (nginx_active, gitea_active)
 
     root_free = runner.check("df -BG / | awk 'NR==2 {gsub(/G/, \"\", $4); print $4}'")
-    repo_path = f"{data_root}/data/gitea-repositories"
-    attachments_path = f"{data_root}/data/attachments"
-    lfs_path = f"{data_root}/lfs"
-    packages_path = f"{data_root}/data/packages"
+    repo_path = config.get("repository.root", f"{data_root}/data/gitea-repositories") or f"{data_root}/data/gitea-repositories"
+    attachments_path = config.get("attachment.path", f"{data_root}/data/attachments") or f"{data_root}/data/attachments"
+    lfs_path = config.get("server.lfs_content_path", f"{data_root}/lfs") or f"{data_root}/lfs"
+    packages_path = config.get("packages.path", f"{data_root}/data/packages") or f"{data_root}/data/packages"
     total_path = data_root
 
     total_mb = _du_mb_if_exists(runner, total_path)
@@ -85,13 +86,13 @@ def collect_live_audit(
         packages_mb=round(packages_mb, 3),
     )
     features = FeatureUsage(
-        repositories=_count(runner, "select count(*) from repository;"),
-        users=_count(runner, 'select count(*) from "user";'),
-        org_memberships=_count(runner, 'select count(*) from "org_user";'),
-        lfs_objects=_count(runner, "select count(*) from lfs_meta_object;"),
-        action_runs=_count(runner, "select count(*) from action_run;"),
-        action_runners=_count(runner, "select count(*) from action_runner;"),
-        packages=_count(runner, "select count(*) from package;"),
+        repositories=_count(runner, database_name, "select count(*) from repository;"),
+        users=_count(runner, database_name, 'select count(*) from "user";'),
+        org_memberships=_count(runner, database_name, 'select count(*) from "org_user";'),
+        lfs_objects=_count(runner, database_name, "select count(*) from lfs_meta_object;"),
+        action_runs=_count(runner, database_name, "select count(*) from action_run;"),
+        action_runners=_count(runner, database_name, "select count(*) from action_runner;"),
+        packages=_count(runner, database_name, "select count(*) from package;"),
     )
     return DeploymentAudit(
         name=hostname,
@@ -108,6 +109,10 @@ def collect_live_audit(
             f"root_url={config.get('server.root_url', '')}",
             f"lfs_start_server={config.get('server.lfs_start_server', '')}",
             f"ssh_authorized_keys_file={config.get('server.ssh_authorized_keys_file', '')}",
+            f"database_name={database_name}",
+            f"repository_root={repo_path}",
+            f"attachments_path={attachments_path}",
+            f"packages_path={packages_path}",
         ],
     )
 
