@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 256" role="img"
+     aria-label="GiteaForgejoMigrator logo: Gitea circle flowing into a Forgejo hexagon">
+  <title>GiteaForgejoMigrator</title>
+  <desc>A simple geometric mark: a circle labeled G flowing through a dashed
+        migration arrow into a filled hexagon labeled F.</desc>
+
+  <!-- Left node: Gitea (open circle, single-stroke G) -->
+  <g>
+    <circle cx="78" cy="128" r="56" fill="#f5f5f4" stroke="#222222" stroke-width="3"/>
+    <text x="78" y="148" text-anchor="middle"
+          font-family="Georgia, 'Times New Roman', serif"
+          font-size="68" font-weight="600" fill="#222222">G</text>
+  </g>
+
+  <!-- Migration arrow: dual dashed shaft + filled arrowhead -->
+  <g stroke="#d9531e" stroke-width="3" fill="none">
+    <line x1="148" y1="118" x2="346" y2="118" stroke-dasharray="6 8"/>
+    <line x1="148" y1="138" x2="346" y2="138" stroke-dasharray="6 8"/>
+  </g>
+  <polygon points="346,98 374,128 346,158" fill="#d9531e"/>
+
+  <!-- Right node: Forgejo (filled hexagon, white serif F) -->
+  <g>
+    <polygon points="434,72 482,100 482,156 434,184 386,156 386,100"
+             fill="#222222"/>
+    <text x="434" y="148" text-anchor="middle"
+          font-family="Georgia, 'Times New Roman', serif"
+          font-size="68" font-weight="700" fill="#f5f5f4">F</text>
+  </g>
+
+  <!-- Wordmark -->
+  <g font-family="'Helvetica Neue', Arial, sans-serif" fill="#222222">
+    <text x="78" y="222" font-size="22" font-weight="600">GiteaForgejoMigrator</text>
+    <text x="78" y="244" font-size="13" fill="#6b6b6b">One-shot preflight + gating + staging.</text>
+  </g>
+</svg>

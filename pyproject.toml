@@ -1,3 +1,43 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "gitea-forgejo-migrator"
+version = "0.1.0-alpha.1"
+description = "Operator-first preflight, gating, and staging plan for in-place Gitea to Forgejo migrations."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "GiteaForgejoMigrator contributors" }]
+keywords = ["gitea", "forgejo", "migration", "preflight", "sysadmin", "git", "smoke-test", "same-vm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Systems Administration",
+]
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+gitea-forgejo-migrator = "gitea_forgejo_migrator.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/TopTier_Technologies/gitea-forgejo-migrator"
+Documentation = "https://github.com/TopTier_Technologies/gitea-forgejo-migrator/blob/main/README.md"
+Source = "https://github.com/TopTier_Technologies/gitea-forgejo-migrator"
+Issues = "https://github.com/TopTier_Technologies/gitea-forgejo-migrator/issues"
+Changelog = "https://github.com/TopTier_Technologies/gitea-forgejo-migrator/blob/main/CHANGELOG.md"
+
+[tool.setuptools]
+package-dir = { "" = "tooling" }
+
+[tool.setuptools.packages.find]
+where = ["tooling"]
+include = ["gitea_forgejo_migrator*", "backup*", "smoke*"]

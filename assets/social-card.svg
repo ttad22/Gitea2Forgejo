@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img"
+     aria-label="GiteaForgejoMigrator social card">
+  <title>GiteaForgejoMigrator — social card</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#101010"/>
+      <stop offset="100%" stop-color="#262626"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <g transform="translate(120, 220)">
+    <circle cx="80" cy="80" r="80" fill="#f5f5f4"/>
+    <text x="80" y="105" text-anchor="middle"
+          font-family="Georgia, 'Times New Roman', serif"
+          font-size="92" fill="#222222">G</text>
+  </g>
+  <g transform="translate(380, 270)">
+    <line x1="0" y1="20" x2="380" y2="20" stroke="#ff7a1a"
+          stroke-width="5" stroke-dasharray="14 16"/>
+    <line x1="0" y1="50" x2="380" y2="50" stroke="#ff7a1a"
+          stroke-width="5" stroke-dasharray="14 16"/>
+    <polygon points="380,-10 430,35 380,80" fill="#ff7a1a"/>
+  </g>
+  <g transform="translate(860, 220)">
+    <polygon points="80,0 160,46 160,114 80,160 0,114 0,46" fill="#ff7a1a"/>
+    <text x="80" y="105" text-anchor="middle"
+          font-family="Georgia, 'Times New Roman', serif"
+          font-size="92" font-weight="700" fill="#101010">F</text>
+  </g>
+
+  <g font-family="'Helvetica Neue', Arial, sans-serif" fill="#f5f5f4">
+    <text x="120" y="120" font-size="44" font-weight="700">GiteaForgejoMigrator</text>
+    <text x="120" y="160" font-size="20" fill="#cfcfcf">A read-only CLI for in-place Gitea → Forgejo migrations.</text>
+    <text x="120" y="540" font-size="18" fill="#a8a8a8">pip install git+https://github.com/TopTier_Technologies/gitea-forgejo-migrator.git@v0.1.0-alpha.1</text>
+    <text x="120" y="580" font-size="16" fill="#7d7d7d">BSD-3-Clause • Alpha 0.1.0-alpha.1 • No GUI • No agent on the box</text>
+  </g>
+</svg>

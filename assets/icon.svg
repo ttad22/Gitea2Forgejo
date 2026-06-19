@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img"
+     aria-label="GiteaForgejoMigrator icon">
+  <title>GFM icon</title>
+  <rect width="256" height="256" rx="36" ry="36" fill="#222222"/>
+  <circle cx="74" cy="84" r="32" fill="none" stroke="#f5f5f4" stroke-width="4"/>
+  <text x="74" y="98" text-anchor="middle"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="36" fill="#f5f5f4">G</text>
+  <line x1="116" y1="118" x2="184" y2="118" stroke="#d9531e"
+        stroke-width="4" stroke-dasharray="5 6"/>
+  <polygon points="184,104 200,128 184,152" fill="#d9531e"/>
+  <polygon points="180,168 210,184 210,216 180,232 150,216 150,184"
+           fill="#d9531e"/>
+  <text x="180" y="210" text-anchor="middle"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="28" font-weight="700" fill="#f5f5f4">F</text>
+</svg>

@@ -1,200 +1,221 @@
 # GiteaForgejoMigrator
 
-Open-source migration tooling and runbooks for moving self-hosted Gitea
-instances to Forgejo with an emphasis on safe, low-downtime, operator-friendly
-upgrades.
+![Gitea → Forgejo](assets/banner.svg)
 
-## Purpose
+Operator-first preflight, gating, and staging plan for **in-place
+Gitea → Forgejo migrations**.
 
-Most migration advice assumes either:
+> Once you've migrated, you're done. There is no plan for what comes
+> after, because there is no "after". This tool exists so a sysadmin
+> can ship a Gitea → Forgejo cutover in a single maintenance window,
+> validate it, and move on.
 
-- a greenfield Forgejo deployment, or
-- a repo-by-repo import flow
+---
 
-That is not enough for operators who need to preserve a live instance in place,
-keep SSH/HTTP clone behavior stable, retain issues and pull requests, and avoid
-blind database surgery.
+## Why this tool exists
 
-This project focuses on:
+Most public migration advice assumes either a *greenfield* Forgejo
+deployment or a *repo-by-repo* import flow. Neither fits operators who
+need to:
 
-- deployment auditing
-- compatibility gating
-- backup validation
-- staged upgrade orchestration
-- rollback preparation
-- post-cutover verification
+- preserve a live Gitea instance in place
+- keep SSH and HTTP clone URLs stable
+- keep issues, pull requests, attachments, and LFS intact
+- avoid blind database surgery
+- finish inside a short maintenance window
 
-## Operator Workflows
+`GiteaForgejoMigrator` is a **read-only** preflight + planning tool
+that produces the artifacts you need to do that cutover safely:
 
-The tool is designed around two execution modes:
+| Artifact                   | From                              | Used by              |
+|----------------------------|-----------------------------------|----------------------|
+| deployment audit report    | `collect-live` / fixture JSON     | you, your reviewer   |
+| readiness evaluation       | `audit`                           | gate / proceed check |
+| compatibility gate         | `gate`                            | CI / pre-cutover     |
+| backup manifest            | `backup-manifest`                 | `freeze-and-backup` step |
+| staged migration plan      | `migration-plan`                  | the runbook          |
+| smoke-check shell script   | `smoke-plan`                      | post-cutover validation |
+| no-touch dry-run report    | `simulate`                        | you, your reviewer   |
 
-1. **Server-local admin run**
-   - install the package on the source host
-   - emit a local wrapper
-   - collect and evaluate the deployment on-box
-   - use the generated audit as the contract for backup, planning, and smoke
-     artifacts
-2. **Trusted admin-SSH run**
-   - run the collector from a management host with direct administrative SSH
-   - preserve the same audit schema and downstream planning flow
+Nothing in this tool **mutates** the source instance.
 
-The product should keep both paths first-class. The transport should be
-replaceable; the migration model should not be.
+## Installation
 
-## Current TTT Reference Deployment
+The tool is a pure-Python package with **no runtime dependencies**.
+Python ≥ 3.10 is required.
 
-The initial design target is the live `git-ops` VM (`vm100`) in the TTT
-environment.
+### Option A — install from GitHub (default)
 
-Observed deployment characteristics from the audit on `2026-06-18`:
+```bash
+pip install "git+https://github.com/TopTier_Technologies/gitea-forgejo-migrator.git@v0.1.0-alpha.1"
+```
 
-- VM name: `git-ops`
-- Address: `10.200.40.100`
-- Service model: `systemd`, not Docker
-- Gitea version: `1.22.0`
-- Database: `PostgreSQL 14`
-- App config: `/etc/gitea/app.ini`
-- Data root: `/var/lib/gitea`
-- Reverse proxy: `nginx` on `:80`
-- Gitea listener: `:3000`
-- Repositories: `36`
-- Users: `5`
-- Org memberships: `2`
-- Repository storage: about `795 MB`
-- Attachments: about `80 MB`
-- LFS objects: `0`
-- Actions runs: `0`
-- Packages: `0`
-- Root filesystem free space: about `188 GB`
+After this, the `gitea-forgejo-migrator` command is on your `$PATH`.
 
-## Migration Constraint That Drives The Design
+### Option B — install from a local clone
 
-The live TTT instance is on `Gitea 1.22.0`, which is significant because
-current official Forgejo guidance still supports an upgrade path from `Gitea
-1.22.x`, but not a transparent direct path from `Gitea 1.23+`.
+```bash
+git clone https://github.com/TopTier_Technologies/gitea-forgejo-migrator.git
+cd gitea-forgejo-migrator
+pip install .
+```
 
-That means the tool should treat `1.22.x` as a first-class migration cohort and
-explicitly gate anything newer.
+### Option C — install from a Node-based package mirror
+
+If your environment fetches Python tools through an `npm`-style store,
+add a tiny shim that delegates to `pip`:
+
+```json
+{
+  "name": "gitea-forgejo-migrator",
+  "version": "0.1.0-alpha.1",
+  "bin": { "gitea-forgejo-migrator": "node_modules/.bin/gfm-passthrough" }
+}
+```
+
+with `node_modules/.bin/gfm-passthrough` set to:
+
+```javascript
+#!/usr/bin/env node
+const { spawn } = require('child_process');
+const py = spawn('python3', ['-m', 'gitea_forgejo_migrator.cli', ...process.argv.slice(2)], { stdio: 'inherit' });
+py.on('exit', (c) => process.exit(c ?? 0));
+```
+
+Treat this option as a fallback. Options A and B are the supported
+paths for this alpha.
+
+## Quick Start
+
+```bash
+# 1. Collect a live audit (server-local or with --ssh-target)
+gitea-forgejo-migrator collect-live \
+    --ssh-target admin@git.example.internal \
+    --output ./my-audit.json
+
+# 2. Read-only evaluation against the audit
+gitea-forgejo-migrator audit ./my-audit.json
+
+# 3. Gate against the next target version
+gitea-forgejo-migrator gate ./my-audit.json --target forgejo-10
+gitea-forgejo-migrator gate ./my-audit.json --target forgejo-current
+
+# 4. Generate the artifacts the runbook needs
+gitea-forgejo-migrator backup-manifest --audit   ./my-audit.json --output ./backup.json
+gitea-forgejo-migrator migration-plan  --audit   ./my-audit.json --output ./plan.json
+gitea-forgejo-migrator smoke-plan      --audit   ./my-audit.json --output ./smoke.sh
+
+# 5. Run the no-touch dry-run pipeline
+gitea-forgejo-migrator simulate --audit ./my-audit.json --output ./dryrun.json
+```
+
+The supported path at the moment is:
+
+```
+Gitea 1.22.x  →  Forgejo 10.x  →  current Forgejo
+```
+
+The `gate` command will refuse to give you a direct path to current
+Forgejo from Gitea 1.23+. This refusal is intentional and matches
+upstream Forgejo guidance.
+
+## Command Surface (alpha)
+
+| Command             | Purpose                                                           |
+|---------------------|-------------------------------------------------------------------|
+| `compatibility`     | Assess a single Gitea source version                              |
+| `audit`             | Evaluate a deployment audit fixture for readiness + risk          |
+| `gate`              | Compatibility gate for the next migration target                  |
+| `backup-manifest`   | Produce the freeze-and-backup checklist                          |
+| `migration-plan`    | Produce a staged migration plan + rollback summary                |
+| `smoke-plan`        | Produce a post-cutover smoke-check shell script                  |
+| `simulate`          | Run the local no-touch pipeline against a fixture                 |
+| `collect-live`      | Read-only audit collected via SSH or on-host shell                |
+| `emit-local-runner` | Emit a server-local wrapper the admin runs by hand                |
+| `preflight-local`   | Run the audit + plan + smoke pipeline locally on the source host  |
+
+## Compatibility Matrix (alpha)
+
+| Source Gitea  | Allowed next target  | Notes                                    |
+|---------------|----------------------|------------------------------------------|
+| `1.21.x`      | unsupported in alpha | Needs a fixture + rule (PRs welcome)     |
+| `1.22.x`      | `forgejo-10`         | Recommended staging cohort               |
+| `1.22.x`      | `forgejo-current`    | **Refused** by `gate`; stage first       |
+| `1.23+`       | `forgejo-10`         | Blocked — upstream Gitea 1.23 cutover    |
+| `1.23+`       | `forgejo-current`    | Blocked — see `gitea-123-blocked` fixture|
+
+The matrix lives in code at
+`tooling/gitea_forgejo_migrator/compatibility.py`. Edge cases
+(`docker-audit.json`, `sqlite-audit.json`, `actions-audit.json`,
+`lfs-heavy-audit.json`, `gitea-123-blocked-audit.json`) live under
+`fixtures/`.
 
 ## Design Principles
 
-1. Audit before mutation.
-2. Refuse unsupported direct upgrade paths.
-3. Always create both application-level and VM-level rollback points.
-4. Preserve existing paths, secrets, and SSH behavior unless the operator asks
-   to change them.
-5. Separate compatibility checks from execution logic.
-6. Make dry-run the default.
+1. **Audit before mutation.** We never recommend a cutover without
+   reading the source instance first.
+2. **Refuse unsupported direct paths.** Hard refusals are a feature.
+3. **Always produce both app-level and VM-level rollback points.**
+4. **Preserve existing paths, secrets, and SSH behavior by default.**
+5. **Separate compatibility checks from execution logic.**
+6. **Make dry-run the default.** Anything that *would* mutate is a
+   separate, opt-in subcommand.
+7. **No transport assumptions in product core.** The collector uses a
+   generic shell; transport choices belong to the operator.
 
-## Planned Components
+The CLI is **terminal-only** in alpha. There is no GUI, no daemon, no
+agent installed on the source host. The host-local runner script
+(`emit-local-runner`) is the one exception, and it is a generated
+artifact, not a service.
 
-- `docs/`
-  - operator runbooks
-  - compatibility matrix
-  - rollback procedures
-  - product direction and future-work proposals
-- `tooling/`
-  - deployment audit scripts
-  - backup validation helpers
-  - staged migration driver
-  - post-cutover smoke checks
+## Repository Layout
 
-## CLI Surface
+```
+.
+├── README.md              ← this file
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── RELEASING.md
+├── LICENSE
+├── pyproject.toml
+├── setup.cfg
+├── MANIFEST.in
+├── .gitignore
+├── assets/                ← logo + icon + banner + social card (SVG)
+├── docs/                  ← runbooks and product direction
+├── fixtures/              ← edge-case audit JSONs
+├── scripts/               ← read-only transport helpers
+├── tests/                 ← pytest suite (61 tests)
+└── tooling/gitea_forgejo_migrator/   ← source package
+```
 
-Current commands:
+## Documentation
 
-- `compatibility`
-- `audit`
-- `gate`
-- `backup-manifest`
-- `migration-plan`
-- `smoke-plan`
-- `simulate`
-- `collect-live`
-- `emit-local-runner`
+- [`docs/MIGRATION_RUNBOOK_VM100.md`](docs/MIGRATION_RUNBOOK_VM100.md)
+- [`docs/VM100_AUDIT_2026-06-18.md`](docs/VM100_AUDIT_2026-06-18.md)
+- [`docs/LOCAL_EXECUTION.md`](docs/LOCAL_EXECUTION.md)
+- [`docs/PRODUCT_ROADMAP.md`](docs/PRODUCT_ROADMAP.md)
+- [`docs/FUTURE_PRODUCT_DIRECTION.md`](docs/FUTURE_PRODUCT_DIRECTION.md)
 
-The CLI should remain dry-run centric until the executor exists.
+## Tests
 
-## Scope Boundaries
+```bash
+pip install -e ".[dev]"
+pytest -q
+```
 
-This project is not trying to:
+`pytest` runs 61 tests covering audit, compatibility, backup planning,
+discovery, pipeline, smoke harness, journal, local runner, CLI
+surface, and every fixture in the matrix.
 
-- rewrite Gitea/Forgejo database schemas generically for all unsupported
-  versions
-- replace official upgrade documentation
-- hide operator risk where upstream compatibility is explicitly absent
+## License
 
-It is trying to:
+BSD 3-Clause — see [LICENSE](LICENSE).
 
-- make supported paths safer
-- make unsupported paths easier to classify early
-- reduce operator error during in-place or same-host migrations
+## Acknowledgements
 
-## Product Direction
-
-The near-term product target is not a hosted migration service and not a
-repo-by-repo importer. It is a **fast in-place migrator** that an operator
-installs on the source server or runs with direct administrative access to the
-source server.
-
-That implies a product shape with three phases:
-
-1. **Admin-installed server-side flow**
-   - packaged for direct operator use on the live host
-   - runs audits, backups, compatibility gates, staged execution, and smoke
-     checks locally or over trusted admin SSH
-   - optimized for the smallest realistic maintenance window and the simplest
-     rollback story
-2. **Later GUI release**
-   - wraps the same migration engine in a guided operator interface
-   - exposes preflight results, maintenance steps, live logs, and rollback
-     checkpoints without changing the execution model
-   - aimed at MSP and infra teams that need repeatability across many small
-     self-hosted instances
-3. **Long-term native Forgejo support**
-   - use evidence from the standalone migrator to propose native migration UX
-     inside Forgejo itself
-   - focus on turning a validated admin workflow into upstream-supported UI
-     affordances rather than carrying a permanent forked experience
-
-The core rule across all three phases is the same: preserve the existing
-instance shape whenever possible. Keep paths, database backend, SSH behavior,
-reverse proxy behavior, and clone URLs stable unless the operator explicitly
-chooses to change them.
-
-## Product Boundaries
-
-The intended product should:
-
-- prioritize in-place and same-host migrations first
-- treat server-side installability as a feature, not a temporary workaround
-- keep execution auditable through generated plans, manifests, journals, and
-  smoke reports
-- prefer refusal and escalation over speculative mutation when upstream support
-  is unclear
-
-The intended product should not:
-
-- depend on a cloud control plane for routine migration execution
-- require an operator to manually stitch together multiple ad hoc scripts during
-  a cutover
-- assume that every target instance wants a new Forgejo host or a fresh URL
-
-## Future Work
-
-See [docs/PRODUCT_ROADMAP.md](/home/svc-opsd/TTT-Research/projects/GiteaForgejoMigrator/docs/PRODUCT_ROADMAP.md)
-for milestone sequencing and
-[docs/FUTURE_PRODUCT_DIRECTION.md](/home/svc-opsd/TTT-Research/projects/GiteaForgejoMigrator/docs/FUTURE_PRODUCT_DIRECTION.md)
-for the detailed proposal covering:
-
-- the admin-installed server-side flow
-- the later GUI product layer
-- the long-term path toward native Forgejo UI migration support
-
-## Next Build Steps
-
-1. build the executor journal and mutation-stage interfaces
-2. add broader edge-case fixture coverage and compatibility matrices
-3. add install-model aware preflight checks for systemd, package, and Docker
-4. test server-local installation and live collection on a reference host
-5. implement the staged `1.22 -> Forgejo 10 -> latest Forgejo` orchestration
+The **pre-flight contribution questions** in `CONTRIBUTING.md` are
+adapted from
+[sohaibt/product-mode](https://github.com/sohaibt/product-mode) (MIT,
+Sohaib Tanveer), used under the project's purpose of letting small
+contributions carry clear rationale.
