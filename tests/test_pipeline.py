@@ -96,6 +96,23 @@ class PipelineTests(unittest.TestCase):
         assert "artifact_systemd_dropin_override" in labels
         assert "artifact_nginx_site_git" in labels
 
+    def test_backup_manifest_skips_artifacts_already_covered_by_data_archive(self) -> None:
+        audit = load_audit(FIXTURE)
+        audit.host_artifacts.append(
+            HostArtifact(
+                artifact_id="hook_under_repo_root",
+                category="git_hook",
+                kind="file",
+                decision="manual_review",
+                source="hook_scan",
+                reason="Repo-local hook",
+                path="/var/lib/gitea/data/gitea-repositories/org/repo.git/hooks/post-receive",
+            )
+        )
+        manifest = build_backup_manifest(audit)
+        labels = {item.label for item in manifest.items}
+        assert "artifact_hook_under_repo_root" not in labels
+
     def test_migration_plan_has_expected_stages(self) -> None:
         audit = load_audit(FIXTURE)
         plan = build_migration_plan(audit)

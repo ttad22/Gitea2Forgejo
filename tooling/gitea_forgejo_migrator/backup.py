@@ -59,7 +59,7 @@ def _discovered_preserve_paths(audit: DeploymentAudit) -> list[tuple[str, str, s
     return discovered
 
 
-def _artifact_backup_items(audit: DeploymentAudit) -> list[BackupItem]:
+def _artifact_backup_items(audit: DeploymentAudit, *, covered_paths: set[str], covered_roots: list[str]) -> list[BackupItem]:
     items: list[BackupItem] = []
     seen_paths: set[str] = set()
     allowed_decisions = {"adopted", "preserved_external", "manual_review"}
@@ -77,7 +77,12 @@ def _artifact_backup_items(audit: DeploymentAudit) -> list[BackupItem]:
         if not archive_kind:
             continue
         normalized = artifact.path.strip()
-        if not normalized or normalized in seen_paths:
+        if (
+            not normalized
+            or normalized in seen_paths
+            or normalized in covered_paths
+            or any(_is_within(normalized, root) for root in covered_roots)
+        ):
             continue
         seen_paths.add(normalized)
         items.append(
@@ -192,7 +197,14 @@ def build_backup_manifest(audit: DeploymentAudit) -> BackupManifest:
             path=path,
             required=False,
         )
-    for item in _artifact_backup_items(audit):
+    covered_roots = [root for root in {data_path, f"{data_root}/custom", f"{data_root}/log", f"{data_root}/lfs"} if root]
+    if repository_root:
+        covered_roots.append(repository_root)
+    if packages_path:
+        covered_roots.append(packages_path)
+    if attachments_path:
+        covered_roots.append(attachments_path)
+    for item in _artifact_backup_items(audit, covered_paths=seen_paths, covered_roots=covered_roots):
         _add_unique_path_item(
             items,
             seen_paths,
