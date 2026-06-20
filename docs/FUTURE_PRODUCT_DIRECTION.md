@@ -79,6 +79,9 @@ The likely non-upstreamable pieces are:
 - environment-specific wrapper scripts
 - private infrastructure orchestration
 
+See [FORGEJO_SETTINGS_UI_PROPOSAL.md](./FORGEJO_SETTINGS_UI_PROPOSAL.md) for
+the proposed admin IA, page structure, refusal states, and lifecycle mapping.
+
 ## Long-Term Position
 
 If the standalone migrator works well, it should become:

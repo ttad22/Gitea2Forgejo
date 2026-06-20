@@ -64,6 +64,11 @@ possible environment. The current alpha has:
 Anything outside those cohorts should be treated as unsupported until a
 fixture and validation path are added for it.
 
+Architecture and future UI:
+
+- [docs/PLATFORM_ADAPTERS.md](./docs/PLATFORM_ADAPTERS.md)
+- [docs/FORGEJO_SETTINGS_UI_PROPOSAL.md](./docs/FORGEJO_SETTINGS_UI_PROPOSAL.md)
+
 ## Installation
 
 The tool is a pure-Python package with **no runtime dependencies**.

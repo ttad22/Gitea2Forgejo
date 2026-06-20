@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .adapters import PlatformAdapter, PlatformAdapterRegistry, RuntimeLayout, SystemdBinaryAdapter
 from .audit import evaluate_deployment
 from .backup import build_backup_manifest
 from .compatibility import assess_gitea_to_forgejo
@@ -33,18 +34,6 @@ class MigrationRequest:
 
 
 @dataclass(frozen=True, slots=True)
-class RuntimeLayout:
-    binary_path: str
-    binary_dir: str
-    service_name: str
-    database_name: str
-    reverse_proxy: str
-    ssh_mode: str
-    arch: str
-    hostname: str
-
-
-@dataclass(frozen=True, slots=True)
 class MigrationOutcome:
     success: bool
     rollback_performed: bool
@@ -62,59 +51,18 @@ class MigrationOutcome:
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
-
-class SupportedCohortAdapter:
-    @staticmethod
-    def _note_value(audit: DeploymentAudit, key: str) -> str:
-        prefix = f"{key}="
-        for note in audit.notes:
-            if note.startswith(prefix):
-                return note[len(prefix) :].strip()
-        return ""
-
-    def validate(self, audit: DeploymentAudit) -> None:
-        problems: list[str] = []
-        if not audit.service.install_mode.startswith("systemd"):
-            problems.append(f"unsupported install_mode={audit.service.install_mode}")
-        if audit.service.database != "postgresql":
-            problems.append(f"unsupported database={audit.service.database}")
-        if audit.service.reverse_proxy != "nginx":
-            problems.append(f"unsupported reverse_proxy={audit.service.reverse_proxy}")
-        if audit.service.ssh_mode != "host-sshd":
-            problems.append(f"unsupported ssh_mode={audit.service.ssh_mode}")
-        compatibility = assess_gitea_to_forgejo(audit.gitea_version)
-        if not compatibility.supported:
-            problems.append(compatibility.reason)
-        if problems:
-            raise RuntimeError("; ".join(problems))
-
-    def detect_layout(self, runner: ShellRunner, audit: DeploymentAudit) -> RuntimeLayout:
-        binary_path = runner.check("command -v gitea")
-        arch = runner.check("uname -m")
-        hostname = runner.check("hostname")
-        database_name = self._note_value(audit, "database_name") or "gitea"
-        return RuntimeLayout(
-            binary_path=binary_path,
-            binary_dir=str(Path(binary_path).parent),
-            service_name=audit.service.app_service_name,
-            database_name=database_name,
-            reverse_proxy=audit.service.reverse_proxy,
-            ssh_mode=audit.service.ssh_mode,
-            arch=arch,
-            hostname=hostname,
-        )
-
-
 class MigrationExecutor:
     def __init__(
         self,
         *,
         runner: ShellRunner | None = None,
-        adapter: SupportedCohortAdapter | None = None,
+        adapter: PlatformAdapter | None = None,
+        adapter_registry: PlatformAdapterRegistry | None = None,
         release_resolver: ReleaseResolver | None = None,
     ) -> None:
         self.runner = runner or ShellRunner()
-        self.adapter = adapter or SupportedCohortAdapter()
+        self.adapter_registry = adapter_registry or PlatformAdapterRegistry()
+        self.adapter = adapter
         self.release_resolver = release_resolver or ReleaseResolver()
 
     def migrate(self, request: MigrationRequest) -> MigrationOutcome:
@@ -122,13 +70,14 @@ class MigrationExecutor:
             raise RuntimeError("migrate requires root privileges unless --dry-run is used.")
 
         audit = collect_live_audit(self.runner, app_ini_path=request.app_ini_path, data_root=request.data_root)
-        self.adapter.validate(audit)
+        adapter = self.adapter or self.adapter_registry.resolve(audit)
+        adapter.validate(audit)
         readiness = evaluate_deployment(_report_from_audit(audit))
         compatibility = assess_gitea_to_forgejo(audit.gitea_version)
         if not readiness.ready and not request.force:
             raise RuntimeError(f"migration blocked by readiness findings: {readiness.risk_level}")
 
-        layout = self.adapter.detect_layout(self.runner, audit)
+        layout = adapter.detect_layout(self.runner, audit)
         releases = self._resolve_releases(request)
         smoke_plan = build_smoke_plan(audit)
         migration_plan = build_migration_plan(audit)
@@ -150,7 +99,15 @@ class MigrationExecutor:
         self._record(journal, paths["journal"], stage="init", action="artifacts-written", work_dir=str(work_dir))
 
         try:
-            self._backup(audit, layout, request, paths, backup_manifest, journal)
+            adapter.backup(
+                runner=self.runner,
+                audit=audit,
+                layout=layout,
+                paths=paths,
+                backup_manifest=backup_manifest,
+                journal=journal,
+                record=self._record,
+            )
             stages_completed.append("backup")
             self._record(journal, paths["journal"], stage="backup", action="completed")
 
@@ -167,19 +124,32 @@ class MigrationExecutor:
                 dump_json(paths["outcome"], outcome.to_dict())
                 return outcome
 
-            self._stage_release("forgejo-10", releases.forgejo_10, layout, audit, request, paths, smoke_plan, journal)
+            adapter.install_release(
+                runner=self.runner,
+                stage_name="forgejo-10",
+                release=releases.forgejo_10,
+                layout=layout,
+                audit=audit,
+                paths=paths,
+                smoke_plan=smoke_plan,
+                journal=journal,
+                record=self._record,
+                run_smoke_plan=self._run_smoke_plan,
+            )
             stages_completed.append("forgejo-10")
             self._record(journal, paths["journal"], stage="forgejo-10", action="completed", version=releases.forgejo_10.tag)
 
-            self._stage_release(
-                "forgejo-current",
-                releases.forgejo_current,
-                layout,
-                audit,
-                request,
-                paths,
-                smoke_plan,
-                journal,
+            adapter.install_release(
+                runner=self.runner,
+                stage_name="forgejo-current",
+                release=releases.forgejo_current,
+                layout=layout,
+                audit=audit,
+                paths=paths,
+                smoke_plan=smoke_plan,
+                journal=journal,
+                record=self._record,
+                run_smoke_plan=self._run_smoke_plan,
             )
             stages_completed.append("forgejo-current")
             self._record(
@@ -203,7 +173,15 @@ class MigrationExecutor:
         except Exception as exc:
             self._record(journal, paths["journal"], stage="failure", action="captured", error=str(exc))
             if not request.dry_run:
-                rolled_back = self._rollback(layout, audit, request, paths, backup_manifest, journal)
+                rolled_back = adapter.rollback(
+                    runner=self.runner,
+                    layout=layout,
+                    audit=audit,
+                    paths=paths,
+                    backup_manifest=backup_manifest,
+                    journal=journal,
+                    record=self._record,
+                )
             outcome = self._finalize_outcome(
                 success=False,
                 rollback_performed=rolled_back,
@@ -233,47 +211,6 @@ class MigrationExecutor:
         )
         return ReleaseBundle(forgejo_10=forgejo_10, forgejo_current=forgejo_current)
 
-    def _stage_release(
-        self,
-        stage_name: str,
-        release: ForgejoRelease,
-        layout: RuntimeLayout,
-        audit: DeploymentAudit,
-        request: MigrationRequest,
-        paths: dict[str, Path],
-        smoke_plan: SmokePlan,
-        journal: Journal,
-    ) -> None:
-        release_dir = Path(paths["release_dir"]) / stage_name
-        self._ensure_dir(release_dir)
-        binary_path = release_dir / release.asset_name
-        self._record(journal, paths["journal"], stage=stage_name, action="download-start", url=release.asset_url)
-        self.runner.check(f"curl -fsSL {sh_quote(release.asset_url)} -o {sh_quote(str(binary_path))}")
-        self.runner.check(f"chmod 0755 {sh_quote(str(binary_path))}")
-        self._verify_release_binary(stage_name, release, binary_path, journal, paths["journal"])
-        self._record(journal, paths["journal"], stage=stage_name, action="downloaded", release_path=str(binary_path))
-
-        self.runner.check(f"systemctl stop {sh_quote(layout.service_name)}")
-        self._record(journal, paths["journal"], stage=stage_name, action="service-stopped", service=layout.service_name)
-
-        self.runner.check(f"install -m 0755 {sh_quote(str(binary_path))} {sh_quote(layout.binary_path)}")
-        self._record(
-            journal,
-            paths["journal"],
-            stage=stage_name,
-            action="binary-replaced",
-            binary_path=layout.binary_path,
-            version=release.tag,
-        )
-
-        self.runner.check(f"systemctl start {sh_quote(layout.service_name)}")
-        self._record(journal, paths["journal"], stage=stage_name, action="service-started", service=layout.service_name)
-
-        self.runner.check("curl -fsS http://127.0.0.1:3000/api/health")
-        self._record(journal, paths["journal"], stage=stage_name, action="healthcheck-passed")
-
-        self._run_smoke_plan(smoke_plan, paths["journal"], journal, stage_name)
-
     def _run_smoke_plan(self, smoke_plan: SmokePlan, journal_path: Path, journal: Journal, stage_name: str) -> None:
         for check in smoke_plan.checks:
             result = self.runner.run(check.command)
@@ -299,180 +236,6 @@ class MigrationExecutor:
                 stderr=result.stderr.strip(),
             )
 
-    def _backup(
-        self,
-        audit: DeploymentAudit,
-        layout: RuntimeLayout,
-        request: MigrationRequest,
-        paths: dict[str, Path],
-        backup_manifest: BackupManifest,
-        journal: Journal,
-    ) -> None:
-        self._ensure_dir(paths["backup_dir"])
-        self._ensure_dir(paths["release_dir"])
-        self.runner.check(f"cp {sh_quote(layout.binary_path)} {sh_quote(str(paths['backup_dir'] / 'gitea-original.bin'))}")
-        self._record(journal, paths["journal"], stage="backup", action="binary-copied")
-        for item in backup_manifest.items:
-            self._capture_backup_item(item, layout, paths, journal)
-        self.runner.check(f"systemctl cat {sh_quote(layout.service_name)} > {sh_quote(str(paths['backup_dir'] / 'service.unit'))}")
-        self._record(journal, paths["journal"], stage="backup", action="filesystem-archived")
-
-    def _capture_backup_item(
-        self,
-        item: BackupItem,
-        layout: RuntimeLayout,
-        paths: dict[str, Path],
-        journal: Journal,
-    ) -> None:
-        if item.kind == "hypervisor_snapshot":
-            self._record(
-                journal,
-                paths["journal"],
-                stage="backup",
-                action="hypervisor-snapshot-required",
-                label=item.label,
-                command=item.command or "",
-            )
-            return
-        if item.kind == "database_dump":
-            dump_path = self._backup_item_path(paths["backup_dir"], item)
-            self.runner.check(
-                f"sudo -u postgres pg_dump -Fc {sh_quote(layout.database_name)} > {sh_quote(str(dump_path))}"
-            )
-            self._record(journal, paths["journal"], stage="backup", action="database-dumped", label=item.label)
-            return
-        if item.kind in {"file_archive", "directory_archive"}:
-            archive_path = self._backup_item_path(paths["backup_dir"], item)
-            if item.required:
-                self._archive_path(item.path or "", archive_path)
-                self._record(
-                    journal,
-                    paths["journal"],
-                    stage="backup",
-                    action="path-archived",
-                    label=item.label,
-                    source_path=item.path or "",
-                )
-            else:
-                if self.runner.run(f"test -e {sh_quote(item.path or '')}").returncode == 0:
-                    self._archive_path(item.path or "", archive_path)
-                    self._record(
-                        journal,
-                        paths["journal"],
-                        stage="backup",
-                        action="path-archived",
-                        label=item.label,
-                        source_path=item.path or "",
-                    )
-                else:
-                    self._record(
-                        journal,
-                        paths["journal"],
-                        stage="backup",
-                        action="optional-path-missing",
-                        label=item.label,
-                        source_path=item.path or "",
-                    )
-            return
-        raise RuntimeError(f"unsupported backup item kind: {item.kind}")
-
-    def _archive_path(self, source: str, target: Path) -> None:
-        source_path = Path(source)
-        parent = source_path.parent
-        name = source_path.name
-        self.runner.check(
-            f"tar czf {sh_quote(str(target))} -C {sh_quote(str(parent))} {sh_quote(name)}"
-        )
-
-    def _verify_release_binary(
-        self,
-        stage_name: str,
-        release: ForgejoRelease,
-        binary_path: Path,
-        journal: Journal,
-        journal_path: Path,
-    ) -> None:
-        if binary_path.name != release.asset_name:
-            raise RuntimeError(f"{stage_name}: unexpected asset name {binary_path.name!r}")
-        version_output = self.runner.check(f"{sh_quote(str(binary_path))} --version")
-        expected_version = release.tag.lstrip("v")
-        if "forgejo" not in version_output.lower() or expected_version not in version_output:
-            raise RuntimeError(
-                f"{stage_name}: downloaded binary version mismatch, expected {expected_version!r}, got {version_output!r}"
-            )
-        self._record(
-            journal,
-            journal_path,
-            stage=stage_name,
-            action="binary-verified",
-            version_output=version_output.strip(),
-        )
-
-    def _rollback(
-        self,
-        layout: RuntimeLayout,
-        audit: DeploymentAudit,
-        request: MigrationRequest,
-        paths: dict[str, Path],
-        backup_manifest: BackupManifest,
-        journal: Journal,
-    ) -> bool:
-        try:
-            self._record(journal, paths["journal"], stage="rollback", action="start")
-            self.runner.run(f"systemctl stop {sh_quote(layout.service_name)}")
-            self.runner.run(
-                f"install -m 0755 {sh_quote(str(paths['backup_dir'] / 'gitea-original.bin'))} {sh_quote(layout.binary_path)}"
-            )
-            for item in backup_manifest.items:
-                self._restore_backup_item(item, layout, paths, journal)
-            self.runner.run(f"systemctl start {sh_quote(layout.service_name)}")
-            self._record(journal, paths["journal"], stage="rollback", action="completed")
-            return True
-        except Exception as exc:
-            self._record(journal, paths["journal"], stage="rollback", action="failed", error=str(exc))
-            return False
-
-    def _restore_backup_item(
-        self,
-        item: BackupItem,
-        layout: RuntimeLayout,
-        paths: dict[str, Path],
-        journal: Journal,
-    ) -> None:
-        if item.kind == "hypervisor_snapshot":
-            return
-        if item.kind == "database_dump":
-            dump_path = self._backup_item_path(paths["backup_dir"], item)
-            self.runner.run(
-                f"sudo -u postgres dropdb --if-exists {sh_quote(layout.database_name)} && "
-                f"sudo -u postgres createdb {sh_quote(layout.database_name)} && "
-                f"sudo -u postgres pg_restore -d {sh_quote(layout.database_name)} {sh_quote(str(dump_path))}"
-            )
-            self._record(journal, paths["journal"], stage="rollback", action="database-restored", label=item.label)
-            return
-        if item.kind in {"file_archive", "directory_archive"}:
-            archive_path = self._backup_item_path(paths["backup_dir"], item)
-            if not archive_path.exists():
-                if item.required:
-                    raise RuntimeError(f"required backup archive missing for {item.label}: {archive_path}")
-                return
-            restore_parent = str(Path(item.path or "/").parent)
-            self.runner.run(f"tar xzf {sh_quote(str(archive_path))} -C {sh_quote(restore_parent)}")
-            self._record(
-                journal,
-                paths["journal"],
-                stage="rollback",
-                action="path-restored",
-                label=item.label,
-                source_path=item.path or "",
-            )
-            return
-        raise RuntimeError(f"unsupported backup item kind: {item.kind}")
-
-    def _backup_item_path(self, backup_dir: Path, item: BackupItem) -> Path:
-        if item.kind == "database_dump":
-            return backup_dir / f"{item.label}.dump"
-        return backup_dir / f"{item.label}.tar.gz"
 
     def _artifact_paths(self, work_dir: Path) -> dict[str, Path]:
         return {
