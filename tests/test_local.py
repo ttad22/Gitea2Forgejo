@@ -4,7 +4,7 @@ import json
 
 from gitea_forgejo_migrator.cli import main
 from gitea_forgejo_migrator.local import build_local_runner_script
-from gitea_forgejo_migrator.models import DeploymentAudit, FeatureUsage, ResourceUsage, ServiceTopology
+from gitea_forgejo_migrator.models import DeploymentAudit, FeatureUsage, HostArtifact, ResourceUsage, ServiceTopology
 from gitea_forgejo_migrator.preflight import run_local_preflight
 
 
@@ -41,6 +41,17 @@ def _build_live_audit() -> DeploymentAudit:
             packages=0,
         ),
         notes=[],
+        host_artifacts=[
+            HostArtifact(
+                artifact_id="nginx_site_git",
+                category="nginx",
+                kind="file",
+                decision="preserved_external",
+                source="nginx_scan",
+                reason="Reverse proxy config",
+                path="/etc/nginx/sites-enabled/git.conf",
+            )
+        ],
     )
 
 
@@ -64,6 +75,7 @@ def test_run_local_preflight_writes_bundle(tmp_path, monkeypatch) -> None:
     assert paths["preflight"].exists()
     saved = json.loads(paths["preflight"].read_text(encoding="utf-8"))
     assert saved["audit"]["host"] == "localhost"
+    assert saved["audit"]["host_artifacts"][0]["artifact_id"] == "nginx_site_git"
     assert bundle["readiness"]["ready"] is True
     assert saved["simulation"]["compatibility"]["supported"] is True
 

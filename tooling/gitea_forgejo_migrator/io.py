@@ -9,6 +9,7 @@ from .models import (
     BackupManifest,
     DeploymentAudit,
     FeatureUsage,
+    HostArtifact,
     MigrationPlan,
     ResourceUsage,
     ServiceTopology,
@@ -38,6 +39,7 @@ def load_audit(path: str | Path) -> DeploymentAudit:
         resources=ResourceUsage(**raw["resources"]),
         features=FeatureUsage(**raw["features"]),
         notes=raw.get("notes", []),
+        host_artifacts=[HostArtifact(**item) for item in raw.get("host_artifacts", [])],
     )
 
 

@@ -35,6 +35,22 @@ class FeatureUsage:
 
 
 @dataclass(slots=True)
+class HostArtifact:
+    artifact_id: str
+    category: str
+    kind: str
+    decision: str
+    source: str
+    reason: str
+    path: str | None = None
+    details: dict[str, str] = field(default_factory=dict)
+    required: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
 class DeploymentAudit:
     name: str
     host: str
@@ -46,6 +62,7 @@ class DeploymentAudit:
     resources: ResourceUsage
     features: FeatureUsage
     notes: list[str] = field(default_factory=list)
+    host_artifacts: list[HostArtifact] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

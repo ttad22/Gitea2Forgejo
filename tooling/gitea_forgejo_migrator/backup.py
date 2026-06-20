@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import PurePosixPath
 
-from .models import BackupItem, BackupManifest, DeploymentAudit
+from .models import BackupItem, BackupManifest, DeploymentAudit, HostArtifact
 
 
 def _note_value(audit: DeploymentAudit, key: str) -> str:
@@ -59,9 +59,42 @@ def _discovered_preserve_paths(audit: DeploymentAudit) -> list[tuple[str, str, s
     return discovered
 
 
+def _artifact_backup_items(audit: DeploymentAudit) -> list[BackupItem]:
+    items: list[BackupItem] = []
+    seen_paths: set[str] = set()
+    allowed_decisions = {"adopted", "preserved_external", "manual_review"}
+    kind_map = {
+        "file": "file_archive",
+        "directory": "directory_archive",
+        "hook": "file_archive",
+        "script": "file_archive",
+        "dropin": "file_archive",
+    }
+    for artifact in audit.host_artifacts:
+        if not artifact.path or artifact.decision not in allowed_decisions:
+            continue
+        archive_kind = kind_map.get(artifact.kind)
+        if not archive_kind:
+            continue
+        normalized = artifact.path.strip()
+        if not normalized or normalized in seen_paths:
+            continue
+        seen_paths.add(normalized)
+        items.append(
+            BackupItem(
+                label=f"artifact_{_slug(artifact.artifact_id)}",
+                kind=archive_kind,
+                path=normalized,
+                required=artifact.required,
+            )
+        )
+    return items
+
+
 def build_backup_manifest(audit: DeploymentAudit) -> BackupManifest:
     data_root = audit.data_root.rstrip("/")
     data_path = f"{data_root}/data"
+    database_name = _note_value(audit, "database_name") or "gitea"
     repository_root = _note_value(audit, "repository_root") or f"{data_root}/data/gitea-repositories"
     attachments_path = _note_value(audit, "attachments_path") or f"{data_root}/data/attachments"
     packages_path = _note_value(audit, "packages_path") or f"{data_root}/data/packages"
@@ -77,7 +110,7 @@ def build_backup_manifest(audit: DeploymentAudit) -> BackupManifest:
         BackupItem(
             label="postgres_dump",
             kind="database_dump",
-            command="sudo -u postgres pg_dump -Fc gitea > gitea.pre-forgejo.dump",
+            command=f"sudo -u postgres pg_dump -Fc {database_name} > {database_name}.pre-forgejo.dump",
         ),
         BackupItem(
             label="app_ini",
@@ -158,6 +191,15 @@ def build_backup_manifest(audit: DeploymentAudit) -> BackupManifest:
             kind=archive_kind,
             path=path,
             required=False,
+        )
+    for item in _artifact_backup_items(audit):
+        _add_unique_path_item(
+            items,
+            seen_paths,
+            label=item.label,
+            kind=item.kind,
+            path=item.path or "",
+            required=item.required,
         )
     return BackupManifest(
         deployment_name=audit.name,

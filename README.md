@@ -155,6 +155,14 @@ That command will:
   attachments, SSH authorized-keys material, and LFS content for rollback
 - harvest additional existing absolute paths declared in `app.ini` and preserve
   them as config-bound artifacts when they exist on disk
+- inventory and preserve deeper host-surface artifacts such as:
+  - systemd unit fragments and drop-ins
+  - `EnvironmentFile=` targets
+  - nginx configs and referenced TLS files
+  - cron files and Gitea-referencing per-user crontabs
+  - repository hook files
+  - `/usr/local/bin`, `/usr/local/sbin`, `/opt`, and `/srv` scripts that
+    reference Gitea/Forgejo paths or hostnames
 - resolve the latest Forgejo `10.x` release and the latest current release
 - stage `Gitea 1.22.x -> Forgejo 10.x -> current Forgejo`
 - run critical smoke checks after each stage

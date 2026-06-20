@@ -8,6 +8,7 @@ from pathlib import Path
 from gitea_forgejo_migrator.backup import build_backup_manifest
 from gitea_forgejo_migrator.io import load_audit
 from gitea_forgejo_migrator.local import build_local_runner_script
+from gitea_forgejo_migrator.models import HostArtifact
 from gitea_forgejo_migrator.planning import build_migration_plan
 from gitea_forgejo_migrator.simulate import build_simulation_report
 from gitea_forgejo_migrator.smoke import build_smoke_plan
@@ -29,6 +30,16 @@ class PipelineTests(unittest.TestCase):
         labels = {item.label for item in manifest.items}
         self.assertIn("postgres_dump", labels)
         self.assertIn("app_ini", labels)
+        dump = next(item for item in manifest.items if item.label == "postgres_dump")
+        self.assertIn("pg_dump -Fc gitea", dump.command)
+
+    def test_backup_manifest_uses_discovered_database_name(self) -> None:
+        audit = load_audit(FIXTURE)
+        audit.notes = [note for note in audit.notes if not note.startswith("database_name=")]
+        audit.notes.append("database_name=codeforge")
+        manifest = build_backup_manifest(audit)
+        dump = next(item for item in manifest.items if item.label == "postgres_dump")
+        self.assertIn("pg_dump -Fc codeforge", dump.command)
 
     def test_smoke_plan_targets_expected_services(self) -> None:
         audit = load_audit(FIXTURE)
@@ -55,6 +66,35 @@ class PipelineTests(unittest.TestCase):
         labels = {item.label for item in manifest.items}
         assert "config_server_cert_file" in labels
         assert "config_mailer_template_dir" in labels
+
+    def test_backup_manifest_includes_host_artifact_paths(self) -> None:
+        audit = load_audit(FIXTURE)
+        audit.host_artifacts.extend(
+            [
+                HostArtifact(
+                    artifact_id="systemd_dropin_override",
+                    category="systemd",
+                    kind="dropin",
+                    decision="manual_review",
+                    source="systemd_scan",
+                    reason="Override file",
+                    path="/etc/systemd/system/gitea.service.d/override.conf",
+                ),
+                HostArtifact(
+                    artifact_id="nginx_site_git",
+                    category="nginx",
+                    kind="file",
+                    decision="preserved_external",
+                    source="nginx_scan",
+                    reason="Nginx site",
+                    path="/etc/nginx/sites-enabled/git.conf",
+                ),
+            ]
+        )
+        manifest = build_backup_manifest(audit)
+        labels = {item.label for item in manifest.items}
+        assert "artifact_systemd_dropin_override" in labels
+        assert "artifact_nginx_site_git" in labels
 
     def test_migration_plan_has_expected_stages(self) -> None:
         audit = load_audit(FIXTURE)
