@@ -85,6 +85,27 @@ def _discover_preserve_paths(
     return discovered
 
 
+def _infer_authorized_keys_file(
+    runner: ShellRunner,
+    config: dict[str, str],
+    *,
+    data_root: str,
+) -> str:
+    configured = (config.get("server.ssh_authorized_keys_file") or "").strip()
+    if configured:
+        return configured
+    run_user = (config.get("run_user") or "git").strip() or "git"
+    candidates = [
+        f"{data_root}/git/.ssh/authorized_keys",
+        f"{data_root}/.ssh/authorized_keys",
+        f"/home/{run_user}/.ssh/authorized_keys",
+    ]
+    for candidate in candidates:
+        if runner.run(f"test -f {sh_quote(candidate)}").returncode == 0:
+            return candidate
+    return candidates[0]
+
+
 def collect_live_audit(
     runner: ShellRunner,
     app_ini_path: str = "/etc/gitea/app.ini",
@@ -151,7 +172,7 @@ def collect_live_audit(
             f"domain={config.get('server.domain', '')}",
             f"root_url={config.get('server.root_url', '')}",
             f"lfs_start_server={config.get('server.lfs_start_server', '')}",
-            f"ssh_authorized_keys_file={config.get('server.ssh_authorized_keys_file', '')}",
+            f"ssh_authorized_keys_file={_infer_authorized_keys_file(runner, config, data_root=data_root)}",
             f"database_name={database_name}",
             f"repository_root={repo_path}",
             f"attachments_path={attachments_path}",

@@ -46,6 +46,23 @@ class DiscoveryTests(unittest.TestCase):
         self.assertIn("preserve_path:file:server.cert_file=/srv/git/certs/server.crt", notes)
         self.assertNotIn("preserve_path:directory:session.provider_config=/var/lib/gitea/data", notes)
 
+    def test_discover_preserve_paths_infers_default_authorized_keys_file(self) -> None:
+        class FakeRunner:
+            def run(self, command: str):
+                mapping = {
+                    "test -f '/var/lib/gitea/git/.ssh/authorized_keys'": 0,
+                }
+                return type("Result", (), {"returncode": mapping.get(command, 1)})()
+
+        from gitea_forgejo_migrator.discovery import _infer_authorized_keys_file
+
+        inferred = _infer_authorized_keys_file(
+            FakeRunner(),
+            {"run_user": "git"},
+            data_root="/var/lib/gitea",
+        )
+        self.assertEqual(inferred, "/var/lib/gitea/git/.ssh/authorized_keys")
+
 
 if __name__ == "__main__":
     unittest.main()
